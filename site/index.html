@@ -153,6 +153,32 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
 .sheet .acts button{flex:1;height:46px;border:0;border-radius:14px;font-weight:600}
 .sheet .reset{background:var(--card2)} .sheet .done{background:var(--ink);color:var(--bg)}
 
+
+.views{margin:0 0 8px}
+.sqctl{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;margin:4px 0 10px}
+.sqctl label{display:flex;flex-direction:column;gap:3px;font:600 .75rem var(--body);color:var(--ink2)}
+.sqctl select{height:40px;border:0;border-radius:12px;background:var(--card);padding:0 10px;font-size:16px;color:var(--ink)}
+.stp{display:flex;align-items:center;background:var(--card);border-radius:12px;height:40px}
+.stp button{border:0;background:none;width:36px;height:40px;font:700 1.2rem var(--num)}
+.stp output{font:700 1rem var(--num);min-width:62px;text-align:center}
+.sqctl .primary{flex:1;min-width:140px;height:40px;border:0;border-radius:12px;background:var(--ink);color:var(--bg);font-weight:600}
+.sqsum{background:var(--card);border-radius:14px;padding:10px 12px;display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:8px}
+.sqsum b{display:block;font:700 1.35rem/1 var(--num);font-variant-numeric:tabular-nums}
+.sqsum span{display:block;font-size:.72rem;color:var(--ink2);margin-top:3px;line-height:1.2}
+.sqnote{font-size:.78rem;color:var(--ink2);margin:0 2px 10px}
+.pl{display:flex;gap:5px;margin-bottom:5px;justify-content:center}
+.pl h4{display:none}
+.tile{flex:1;max-width:100px;min-width:0;background:var(--card);border-radius:12px;padding:6px 6px 5px;position:relative;border-top:3px solid var(--p);text-align:center}
+.tile.cap::after{content:"C";position:absolute;top:-3px;right:4px;font:700 .65rem/1 var(--num);background:var(--ink);color:var(--bg);border-radius:0 0 5px 5px;padding:3px 4px 2px}
+.tile .tn{font:600 .88rem/1.1 var(--num);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tile .tm{font:500 .68rem var(--num);color:var(--ink2);margin-top:2px;white-space:nowrap}
+.tile .tp{font:700 1.15rem/1 var(--num);margin-top:3px;font-variant-numeric:tabular-nums}
+.tile .tb{display:flex;gap:3px;margin-top:4px}
+.tile .tb button{flex:1;min-width:0;padding:0;border:0;background:var(--card2);border-radius:8px;height:30px;font:600 .7rem var(--num);color:var(--ink2)}
+.tile .tb button[aria-pressed=true]{background:var(--ink);color:var(--bg)}
+.tile.bn{opacity:.85}
+.bench{margin-top:8px;padding-top:8px;border-top:1px dashed var(--line)}
+.bench .lab{font:600 .75rem var(--body);color:var(--ink2);margin:0 0 5px 2px}
 @media (prefers-reduced-motion:no-preference){
   .dwrap{transition:grid-template-rows .22s ease}
   .intro .strip i{animation:grow .5s cubic-bezier(.2,.8,.2,1) both;animation-delay:calc(var(--i)*35ms)}
@@ -182,11 +208,21 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
       <button class="ic" id="lockbtn" type="button" aria-label="Lock"><svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg></button>
     </div>
     <div class="sub" id="meta"></div>
-    <input class="search" id="q" type="search" placeholder="Search players" aria-label="Search players">
+    <div class="views sort wide" id="views" role="group" aria-label="View"><button type="button" data-v="players" aria-pressed="true">Players</button><button type="button" data-v="squad" aria-pressed="false">Squad</button></div>
+    <div id="pctl"><input class="search" id="q" type="search" placeholder="Search players" aria-label="Search players">
     <div class="bar2"><span id="count"></span><span class="sp"></span>
-      <div class="sort" role="group" aria-label="Sort by"><button id="s-total" type="button"></button><button id="s-next" type="button"></button><button id="s-value" type="button">Value</button></div></div>
+      <div class="sort" role="group" aria-label="Sort by"><button id="s-total" type="button"></button><button id="s-next" type="button"></button><button id="s-value" type="button">Value</button></div></div></div>
   </div></header>
-  <div class="wrap"><div id="list"></div><footer id="foot"></footer></div>
+  <div class="wrap"><div id="list"></div>
+    <section id="squadview" hidden>
+      <div class="sqctl">
+        <label>Budget<span class="stp"><button type="button" id="b-dn" aria-label="Lower budget">&minus;</button><output id="b-out"></output><button type="button" id="b-up" aria-label="Raise budget">+</button></span></label>
+        <label>Horizon<select id="sq-hz" aria-label="Gameweeks counted"></select></label>
+        <button type="button" id="sq-build" class="primary">Build best squad</button>
+      </div>
+      <div id="sqout"></div>
+    </section>
+    <footer id="foot"></footer></div>
 
   <nav class="dock" aria-label="Filters"><div class="in">
     <div class="pchips" id="pos" role="group" aria-label="Position"></div>
@@ -201,7 +237,7 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
         <input id="pmin" type="range" aria-label="Minimum price" step="0.1"><input id="pmax" type="range" aria-label="Maximum price" step="0.1"></div></div>
     <div class="f"><label for="hz">Gameweeks counted in the total</label><select id="hz"></select></div>
     <div class="f"><div class="lab"><span>Value compares against</span></div>
-      <div class="sort wide" id="vb" role="group" aria-label="Value baseline"><button type="button" data-vb="floor" aria-pressed="true">Minimum price</button><button type="button" data-vb="starter" aria-pressed="false">Cheapest starter</button></div></div>
+      <div class="sort wide" id="vb" role="group" aria-label="Value baseline"><button type="button" data-vb="starter" aria-pressed="true">Cheapest starter</button><button type="button" data-vb="floor" aria-pressed="false">Minimum price</button></div></div>
     <label class="tg">Hide injured and suspended players<input id="avail" type="checkbox" checked></label>
     <div class="acts"><button class="reset" id="reset" type="button">Reset</button><button class="done" id="done" type="button">Show players</button></div>
   </div></dialog>
@@ -214,7 +250,7 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
 'use strict';
 const $ = s => document.querySelector(s);
 const POS = ['All','GKP','DEF','MID','FWD'];
-const state = {pos:'All', team:'', q:'', hz:8, avail:true, sort:'total', open:null, pmin:0, pmax:99, lo:0, hi:99, data:null, intro:true, vbase:'floor'};
+const state = {pos:'All', team:'', q:'', hz:8, avail:true, sort:'total', open:null, pmin:0, pmax:99, lo:0, hi:99, data:null, intro:true, vbase:'starter', view:'players', budget:100, locked:new Set(), banned:new Set(), squad:null};
 const store = {
   get(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } },
   set(k,v){ try{ localStorage.setItem(k,v); }catch(e){} },
@@ -281,7 +317,7 @@ function start(d){
   const teams = [...new Set(d.players.map(p => p.team))].sort();
   $('#team').innerHTML = '<option value="">All teams</option>' + teams.map(t => `<option>${t}</option>`).join('');
   $('#hz').innerHTML = d.horizon.map((g,i) => `<option value="${i+1}">${i===0?'Next gameweek only':'Next '+(i+1)+' gameweeks'}</option>`).join('');
-  $('#hz').value = state.hz;
+  $('#hz').value = state.hz; $('#sq-hz').innerHTML = $('#hz').innerHTML; $('#sq-hz').value = state.hz;
   for(const id of ['#pmin','#pmax']){ const e=$(id); e.min=state.lo; e.max=state.hi; }
   $('#pmin').value = state.pmin; $('#pmax').value = state.pmax; syncPrice();
   $('#s-next').textContent = 'GW ' + g0;
@@ -388,6 +424,152 @@ function detail(p){
       <div class="info">The baseline is ${state.vbase==='starter'?'the average of the three cheapest fit '+p.pos+'s expected to play':'the best three fit '+p.pos+'s within £0.3m of the minimum price'}: ${f1(state.rep[p.pos].pts)} points over the same period. Extra spend counts as at least £1.0m so tiny price gaps do not inflate the score.</div></div>`}</div>`;
 }
 
+/* ---------- squad building ---------- */
+/* Maximise, over the chosen gameweeks, the best legal XI each week plus a doubled captain, with a small weight on the
+   bench. Constraints: 15 players split 2/5/5/3, budget, at most 3 per club, locked players kept, banned players excluded.
+   Solved by randomised restarts + best-improvement swaps over a pruned candidate list; tests/exact_squad.py compares it with an exact MILP (gap well under 1%). */
+const MINXI = {DEF:3, MID:2, FWD:1};
+const BENCH_W = 0.1;
+function lineupScore(sq, E, hz){            // sq: array of pool indexes; E[i]: array of ep per gw
+  let tot = 0;
+  for(let g=0; g<hz; g++){
+    const by = {GKP:[],DEF:[],MID:[],FWD:[]};
+    for(const i of sq) by[i.pos].push(E[i.k][g]);
+    for(const k in by) by[k].sort((a,b)=>b-a);
+    let xi = by.GKP[0], cap = by.GKP[0], bench = by.GKP[1] || 0;
+    const rest = [];
+    for(const k of ['DEF','MID','FWD']){
+      const a = by[k];
+      for(let j=0;j<a.length;j++){ if(j<MINXI[k]){ xi+=a[j]; if(a[j]>cap) cap=a[j]; } else rest.push(a[j]); }
+    }
+    rest.sort((a,b)=>b-a);
+    for(let j=0;j<rest.length;j++){ if(j<4){ xi+=rest[j]; if(rest[j]>cap) cap=rest[j]; } else bench+=rest[j]; }
+    tot += xi + cap + BENCH_W*bench;
+  }
+  return tot;
+}
+function solveSquad(data, hz, budget, locked, banned, restarts){
+  const need = data.squad, cost = {};
+  const pool = data.players.filter(p => p.price!=null && !banned.has(p.code) && (locked.has(p.code) || p.status==='a' || (p.status==='d')))
+    .map((p,k) => ({code:p.code, pos:p.pos, team:p.team, price:Math.round(p.price*10), k, p}));
+  const E = pool.map(o => o.p.ep.slice(0,hz));
+  pool.forEach(o => { o.tot = sum(o.p.ep,hz); });
+  const byPos = {}, cheapest = {};
+  for(const pos in need){
+    const all = pool.filter(o=>o.pos===pos).sort((x,y)=>y.tot-x.tot);
+    cheapest[pos] = Math.min(...all.map(o=>o.price));
+    // keep the strongest 40 plus the best of the cheap enablers, and anyone locked: the optimum is almost always in here
+    const keep = new Set(all.slice(0,45)); all.filter(o=>o.price<=cheapest[pos]+12).slice(0,25).forEach(o=>keep.add(o));
+    all.filter(o=>locked.has(o.code)).forEach(o=>keep.add(o));
+    byPos[pos] = all.filter(o=>keep.has(o));
+  }
+  const B = Math.round(budget*10);
+  const score = sq => lineupScore(sq, E, hz);
+  let best = null, bestS = -1;
+  let seed = 12345; const rnd = () => (seed = (seed*1664525+1013904223)>>>0)/4294967296;
+  for(let r=0; r<restarts; r++){
+    const sq = []; const cnt = {}; let spent = 0; let ok = true;
+    const lockedObjs = pool.filter(o => locked.has(o.code));
+    for(const o of lockedObjs){ sq.push(o); cnt[o.team]=(cnt[o.team]||0)+1; spent+=o.price; }
+    const slots = []; for(const pos in need){ const have = lockedObjs.filter(o=>o.pos===pos).length; for(let j=have;j<need[pos];j++) slots.push(pos); }
+    slots.sort(()=>rnd()-.5);
+    for(let si=0; si<slots.length; si++){
+      const pos = slots[si], remaining = slots.slice(si+1);
+      const reserve = remaining.reduce((t,q)=>t+cheapest[q],0);
+      const cand = byPos[pos].filter(o => !sq.includes(o) && (cnt[o.team]||0)<3 && spent+o.price+reserve<=B);
+      if(!cand.length){ ok=false; break; }
+      // even restarts: random pick biased to the best players; odd restarts: premium stars first, then best points-per-pound fill
+      const stars = r%2===1 && si < (r%8===1?1:r%8===3?2:r%8===5?3:0);
+      if(stars) cand.sort((a,b)=>b.tot-a.tot); else if(r%2===1) cand.sort((a,b)=>b.tot/b.price-a.tot/a.price); else cand.sort((a,b)=>b.tot-a.tot);
+      const o = cand[Math.floor(rnd()*rnd()*Math.min(cand.length,stars?6:25))];
+      sq.push(o); cnt[o.team]=(cnt[o.team]||0)+1; spent+=o.price;
+    }
+    if(!ok) continue;
+    let cur = score(sq);
+    for(let it=0; it<80; it++){
+      let move = null, mv = cur + 1e-9;
+      for(let a=0; a<sq.length; a++){
+        const out = sq[a]; if(locked.has(out.code)) continue;
+        const sp = spent - out.price;
+        for(const o of byPos[out.pos]){
+          if(o===out || sq.includes(o) || sp+o.price>B) continue;
+          if(o.team!==out.team && (cnt[o.team]||0)>=3) continue;
+          sq[a]=o; const v = score(sq); sq[a]=out;
+          if(v>mv){ mv=v; move=[a,o]; }
+        }
+      }
+      if(!move) break;
+      const [a,o]=move, out=sq[a];
+      cnt[out.team]--; cnt[o.team]=(cnt[o.team]||0)+1; spent += o.price-out.price; sq[a]=o; cur = mv;
+    }
+    if(cur>bestS){ bestS=cur; best=sq.slice(); }
+  }
+  if(!best) return null;
+  // polish: pair swaps (two players change at once) escape the budget-coupled local optima single swaps cannot
+  const short = {}; for(const pos in need) short[pos] = byPos[pos].slice(0,34);
+  const feas = sq => { const c={}; let sp=0; for(const o of sq){ c[o.team]=(c[o.team]||0)+1; sp+=o.price; if(c[o.team]>3) return false; } return sp<=B; };
+  for(let round=0; round<8; round++){
+    let move=null, mv=bestS+1e-9;
+    for(let a=0;a<best.length;a++){ if(locked.has(best[a].code)) continue;
+      for(let b=a+1;b<best.length;b++){ if(locked.has(best[b].code)) continue;
+        const oa=best[a], ob=best[b];
+        for(const x of short[oa.pos]){ if(best.includes(x)) continue;
+          for(const y of short[ob.pos]){ if(best.includes(y) || y===x) continue;
+            best[a]=x; best[b]=y;
+            if(feas(best)){ const v=score(best); if(v>mv){ mv=v; move=[a,x,b,y]; } }
+            best[a]=oa; best[b]=ob; } } } }
+    if(!move) break;
+    best[move[0]]=move[1]; best[move[2]]=move[3]; bestS=mv;
+  }
+  return {squad:best.map(o=>o.p), score:bestS, spent:best.reduce((t,o)=>t+o.price,0)/10};
+}
+function pickXI(squad, hz){                   // display lineup: by horizon total
+  const t = p => sum(p.ep,hz), by = {GKP:[],DEF:[],MID:[],FWD:[]};
+  squad.forEach(p => by[p.pos].push(p)); for(const k in by) by[k].sort((a,b)=>t(b)-t(a));
+  const xi = [by.GKP[0]], rest = [], bench = [by.GKP[1]];
+  for(const k of ['DEF','MID','FWD']) by[k].forEach((p,j) => (j<MINXI[k] ? xi : rest).push(p));
+  rest.sort((a,b)=>t(b)-t(a)); rest.slice(0,4).forEach(p=>xi.push(p)); rest.slice(4).forEach(p=>bench.push(p));
+  const cap = xi.reduce((a,b)=>t(b)>t(a)?b:a);
+  return {xi, bench:bench.filter(Boolean), cap};
+}
+function tile(p, hz, cap){
+  const lk = state.locked.has(p.code);
+  return `<div class="tile pos-${p.pos}${cap?' cap':''}"><div class="tn" title="${esc(p.name)}">${esc(p.name)}</div>
+    <div class="tm">${p.team} · £${p.price.toFixed(1)}</div><div class="tp">${f1(sum(p.ep,hz))}</div>
+    <div class="tb"><button type="button" data-lock="${p.code}" aria-pressed="${lk}" aria-label="Keep ${esc(p.name)} in the squad">${lk?'Kept':'Keep'}</button><button type="button" data-ban="${p.code}" aria-label="Replace ${esc(p.name)}">Swap</button></div></div>`;
+}
+function renderSquad(){
+  const d = state.data, hz = +$('#sq-hz').value || d.horizon.length;
+  $('#b-out').textContent = '£' + state.budget.toFixed(1) + 'm';
+  if(!state.squad){ $('#sqout').innerHTML = '<div class="empty">Press Build best squad to pick the 15 players with the most projected points under the budget, club and position rules.</div>'; return; }
+  const sq = state.squad.squad, {xi, bench, cap} = pickXI(sq, hz);
+  const row = pos => `<div class="pl">${xi.filter(p=>p.pos===pos).map(p=>tile(p,hz,p===cap)).join('')}</div>`;
+  const xiPts = xi.reduce((t,p)=>t+sum(p.ep,hz),0) + sum(cap.ep,hz);
+  $('#sqout').innerHTML = `<div class="sqsum"><div><b>${f1(xiPts)}</b><span>points from the XI with the captain doubled, over ${hz===1?'the next gameweek':hz+' gameweeks'}</span></div>
+    <div><b>£${state.squad.spent.toFixed(1)}m</b><span>spent, £${(state.budget-state.squad.spent).toFixed(1)}m left</span></div>
+    <div><b>${esc(cap.name)}</b><span>captain, ${f1(sum(cap.ep,hz))} points</span></div></div>
+    <p class="sqnote">Lineups can change each gameweek; this shows the XI that scores most over the whole period. Keep a player to hold him through a rebuild, or Swap to exclude him.</p>
+    ${row('FWD')}${row('MID')}${row('DEF')}${row('GKP')}
+    <div class="bench"><div class="lab">Bench</div><div class="pl">${bench.map(p=>tile(p,hz,false)).join('')}</div></div>`;
+}
+function buildSquad(){
+  const hz = +$('#sq-hz').value || state.data.horizon.length;
+  $('#sqout').innerHTML = '<div class="empty">Building...</div>';
+  setTimeout(() => {
+    state.squad = solveSquad(state.data, hz, state.budget, state.locked, state.banned, 12);
+    if(!state.squad) $('#sqout').innerHTML = '<div class="empty">No legal squad fits this budget with the players kept. Raise the budget or release a kept player.</div>';
+    else renderSquad();
+  }, 20);
+}
+function setView(v){
+  state.view = v;
+  document.querySelectorAll('#views button').forEach(x=>x.setAttribute('aria-pressed',x.dataset.v===v));
+  const sqv = v==='squad';
+  $('#pctl').hidden = sqv; $('#list').hidden = sqv; $('#squadview').hidden = !sqv; document.querySelector('.dock').hidden = sqv;
+  if(sqv) renderSquad(); else render();
+}
+window.FPL = {solveSquad, lineupScore, state};
+
 /* ---------- events ---------- */
 const sheet = $('#sheet');
 document.addEventListener('click', ev => {
@@ -398,13 +580,19 @@ document.addEventListener('click', ev => {
   else if(b.id==='s-total'){ state.sort='total'; render(); }
   else if(b.id==='s-next'){ state.sort='next'; render(); }
   else if(b.dataset.vb){ state.vbase=b.dataset.vb; document.querySelectorAll('#vb button').forEach(x=>x.setAttribute('aria-pressed',x===b)); render(); }
+  else if(b.dataset.v){ setView(b.dataset.v); }
+  else if(b.dataset.lock){ const c=+b.dataset.lock; state.locked.has(c)?state.locked.delete(c):state.locked.add(c); renderSquad(); }
+  else if(b.dataset.ban){ const c=+b.dataset.ban; state.banned.add(c); state.locked.delete(c); buildSquad(); }
+  else if(b.id==='b-dn'){ state.budget=Math.max(80,+(state.budget-0.5).toFixed(1)); state.squad=null; renderSquad(); }
+  else if(b.id==='b-up'){ state.budget=Math.min(120,+(state.budget+0.5).toFixed(1)); state.squad=null; renderSquad(); }
+  else if(b.id==='sq-build'){ buildSquad(); }
   else if(b.id==='s-value'){ state.sort='value'; render(); }
   else if(b.id==='lockbtn'){ store.del('fpl.pw'); location.reload(); }
   else if(b.id==='theme'){ const t = curTheme()==='dark'?'light':'dark'; applyTheme(t); store.set('fpl.theme', t); }
   else if(b.id==='fopen'){ sheet.showModal(); }
   else if(b.id==='done'){ sheet.close(); }
   else if(b.id==='reset'){
-    Object.assign(state,{team:'',hz:state.data.horizon.length,avail:true,vbase:'floor'}); document.querySelectorAll('#vb button').forEach(x=>x.setAttribute('aria-pressed',x.dataset.vb==='floor'));
+    Object.assign(state,{team:'',hz:state.data.horizon.length,avail:true,vbase:'starter'}); document.querySelectorAll('#vb button').forEach(x=>x.setAttribute('aria-pressed',x.dataset.vb==='starter'));
     $('#team').value=''; $('#hz').value=state.hz; $('#avail').checked=true; $('#pmin').value=state.lo; $('#pmax').value=state.hi; syncPrice(); render();
   }
 });
