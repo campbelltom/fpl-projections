@@ -1,1 +1,3 @@
 config/_last_backtest.pkl
+__pycache__/
+*.pyc
