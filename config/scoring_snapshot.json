@@ -1,0 +1,17 @@
+{
+  "_source": "https://fantasy.premierleague.com/api/bootstrap-static/ -> game_config.scoring (fetched 2026-10-14)",
+  "long_play": 2,
+  "short_play": 1,
+  "goals_conceded": {"DEF": -1, "FWD": 0, "GKP": -1, "MID": 0},
+  "saves": 1,
+  "goals_scored": {"DEF": 6, "FWD": 4, "GKP": 10, "MID": 5},
+  "assists": 3,
+  "clean_sheets": {"DEF": 4, "FWD": 0, "GKP": 4, "MID": 1},
+  "penalties_saved": 5,
+  "penalties_missed": -2,
+  "yellow_cards": -1,
+  "red_cards": -3,
+  "own_goals": -2,
+  "bonus": 1,
+  "defensive_contribution": {"DEF": 2, "FWD": 2, "GKP": 0, "MID": 2}
+}
