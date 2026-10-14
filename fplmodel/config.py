@@ -21,6 +21,10 @@ DC_THRESHOLD = {"DEF": 10, "MID": 12, "FWD": 12, "GKP": None}
 
 HORIZON_GWS = 8
 
+# Squad rules used for the 'value over minimum spend' number
+SQUAD = {"GKP": 2, "DEF": 5, "MID": 5, "FWD": 3}
+BUDGET = 100.0
+
 
 @dataclass
 class HalfLives:

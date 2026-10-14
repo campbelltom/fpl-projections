@@ -19,7 +19,7 @@ import pandas as pd
 warnings.filterwarnings("ignore")
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
-from fplmodel.config import CURRENT_SEASON, HORIZON_GWS, Params  # noqa: E402
+from fplmodel.config import BUDGET, CURRENT_SEASON, HORIZON_GWS, SQUAD, Params  # noqa: E402
 from fplmodel.data import current_gw  # noqa: E402
 from fplmodel.engine import Context  # noqa: E402
 from fplmodel.export import encrypt_json  # noqa: E402
@@ -130,7 +130,11 @@ def main() -> None:
     n_low = sum(r["low_history"] for r in out_players)
     if n_low:
         notes.append(f"{n_low} players have fewer than 5 league appearances on record (flagged low_history).")
+    # cheapest price per position across the whole current roster: the compulsory minimum spend per slot
+    roster_pos = players["position"]
+    floor = {pos: round(float(price.reindex(roster_pos.index[roster_pos == pos]).min()), 1) for pos in SQUAD if len(price)}
     payload = {
+        "floor": floor, "squad": SQUAD, "budget": BUDGET,
         "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "season": CURRENT_SEASON, "current_gw": int(gw0), "horizon": gws, "model_version": params.version,
         "gw_dates": {int(gw): str(s.matches.loc[s.matches["gameweek"] == gw, "kickoff_time"].min()) for gw in gws},

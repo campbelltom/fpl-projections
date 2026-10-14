@@ -58,6 +58,7 @@ button{cursor:pointer}
 .bar2 .sp{flex:1}
 .sort{display:inline-flex;background:var(--card);border-radius:10px;padding:2px}
 .sort button{border:0;background:none;border-radius:8px;padding:5px 11px;font:600 .85rem var(--num);color:var(--ink2)}
+.sort.wide{display:flex}.sort.wide button{flex:1;padding:10px 8px}
 .sort button[aria-pressed=true]{background:var(--ink);color:var(--bg)}
 
 /* list */
@@ -65,7 +66,7 @@ button{cursor:pointer}
 @media (min-width:820px){#list{display:grid;grid-template-columns:1fr 1fr;gap:8px}.item.open{grid-column:1/-1}}
 .item{background:var(--card);border-radius:14px;overflow:hidden;position:relative}
 .item::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--p)}
-.row{all:unset;box-sizing:border-box;cursor:pointer;display:grid;grid-template-columns:minmax(0,1fr) 88px 46px;gap:8px;align-items:center;width:100%;padding:8px 10px 8px 14px;min-height:54px}
+.row{all:unset;box-sizing:border-box;cursor:pointer;display:grid;grid-template-columns:minmax(0,1fr) 82px minmax(50px,auto);gap:8px;align-items:center;width:100%;padding:8px 10px 8px 14px;min-height:54px}
 .row:focus-visible{outline:3px solid var(--focus);outline-offset:-3px;border-radius:14px}
 .row>span:first-child{min-width:0}
 .l1{display:flex;align-items:baseline;gap:6px;min-width:0}
@@ -103,6 +104,10 @@ button{cursor:pointer}
 .comp .bar span.neg{background:var(--bad)}
 .comp .t{text-align:right;font:600 .85rem var(--num);font-variant-numeric:tabular-nums}
 .info{color:var(--ink2);font-size:.8rem;margin-top:8px}
+.valbox{grid-column:1/-1;background:var(--card2);border-radius:12px;padding:10px 12px}
+.vgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.vgrid b{display:block;font:700 1.25rem/1 var(--num);font-variant-numeric:tabular-nums;color:var(--p)}
+.vgrid span{display:block;font-size:.72rem;color:var(--ink2);line-height:1.2;margin-top:3px}
 
 .empty{padding:30px 6px;color:var(--ink2)}
 footer{padding:6px 2px 110px;color:var(--ink2);font-size:.78rem;max-width:62ch}
@@ -179,7 +184,7 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
     <div class="sub" id="meta"></div>
     <input class="search" id="q" type="search" placeholder="Search players" aria-label="Search players">
     <div class="bar2"><span id="count"></span><span class="sp"></span>
-      <div class="sort" role="group" aria-label="Sort by"><button id="s-total" type="button"></button><button id="s-next" type="button"></button></div></div>
+      <div class="sort" role="group" aria-label="Sort by"><button id="s-total" type="button"></button><button id="s-next" type="button"></button><button id="s-value" type="button">Value</button></div></div>
   </div></header>
   <div class="wrap"><div id="list"></div><footer id="foot"></footer></div>
 
@@ -195,6 +200,8 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
       <div class="rng"><div class="track"></div><div class="fill" id="pfill"></div>
         <input id="pmin" type="range" aria-label="Minimum price" step="0.1"><input id="pmax" type="range" aria-label="Maximum price" step="0.1"></div></div>
     <div class="f"><label for="hz">Gameweeks counted in the total</label><select id="hz"></select></div>
+    <div class="f"><div class="lab"><span>Value compares against</span></div>
+      <div class="sort wide" id="vb" role="group" aria-label="Value baseline"><button type="button" data-vb="floor" aria-pressed="true">Minimum price</button><button type="button" data-vb="starter" aria-pressed="false">Cheapest starter</button></div></div>
     <label class="tg">Hide injured and suspended players<input id="avail" type="checkbox" checked></label>
     <div class="acts"><button class="reset" id="reset" type="button">Reset</button><button class="done" id="done" type="button">Show players</button></div>
   </div></dialog>
@@ -207,7 +214,7 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
 'use strict';
 const $ = s => document.querySelector(s);
 const POS = ['All','GKP','DEF','MID','FWD'];
-const state = {pos:'All', team:'', q:'', hz:8, avail:true, sort:'total', open:null, pmin:0, pmax:99, lo:0, hi:99, data:null, intro:true};
+const state = {pos:'All', team:'', q:'', hz:8, avail:true, sort:'total', open:null, pmin:0, pmax:99, lo:0, hi:99, data:null, intro:true, vbase:'floor'};
 const store = {
   get(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } },
   set(k,v){ try{ localStorage.setItem(k,v); }catch(e){} },
@@ -279,7 +286,7 @@ function start(d){
   $('#pmin').value = state.pmin; $('#pmax').value = state.pmax; syncPrice();
   $('#s-next').textContent = 'GW ' + g0;
   const n = d.notes.length ? d.notes.map(x=>`<p>${esc(x)}</p>`).join('') : '';
-  $('#foot').innerHTML = n + `<p>Expected points under the official FPL scoring, from a team model plus a per-player model. Players with fewer than five league appearances are marked new: treat their numbers as rough. Model ${esc(d.model_version)}.</p>`;
+  $('#foot').innerHTML = n + `<p>Expected points under the official FPL scoring, from a team model plus a per-player model. Players with fewer than five league appearances are marked new: treat their numbers as rough. Model ${esc(d.model_version)}.</p><p><b>Value</b> is how many points a player adds over a minimum-price player in his position, per £m spent above that minimum. Every squad needs 2 goalkeepers, 5 defenders, 5 midfielders and 3 forwards, so at least £${minSquad().toFixed(1)}m is spent before you choose anyone: the other £${(d.budget-minSquad()).toFixed(1)}m is what value is measured against.</p>`;
   render();
 }
 
@@ -295,6 +302,27 @@ function activeFilters(){
   return (state.team?1:0) + ((state.pmin>state.lo||state.pmax<state.hi)?1:0) + (state.hz!==state.data.horizon.length?1:0) + (state.avail?0:1);
 }
 
+/* Value = points above a minimum-price player, per GBP m spent above the minimum price for that position.
+   Replacement = average of the 3 best-projected fit players priced within 0.3m of the position's price floor. */
+function replacement(hz){
+  const d = state.data, res = {};
+  for(const pos of Object.keys(d.floor)){
+    const fit = d.players.filter(p => p.pos===pos && p.status==='a' && p.price!=null && p.p_play[0]>=0.6);
+    let pool, price;
+    if(state.vbase==='starter'){            // cheapest likely starters: the 3 lowest-priced fit players expected to play
+      pool = fit.sort((x,y)=>x.price-y.price || sum(y.ep,hz)-sum(x.ep,hz)).slice(0,3);
+      price = pool.length ? pool.reduce((t,p)=>t+p.price,0)/pool.length : d.floor[pos];
+    }else{                                   // minimum price: best 3 fit players within 0.3m of the position's price floor
+      pool = fit.filter(p => p.price<=d.floor[pos]+0.3).sort((x,y)=>sum(y.ep,hz)-sum(x.ep,hz)).slice(0,3);
+      price = d.floor[pos];
+    }
+    res[pos] = {pts: pool.length ? pool.reduce((t,p)=>t+sum(p.ep,hz),0)/pool.length : 0, price};
+  }
+  return res;
+}
+function minSquad(){ const d=state.data; return Object.entries(d.squad).reduce((t,[k,n])=>t+n*d.floor[k],0); }
+const sg = x => (x>=0?'+':'\u2212')+Math.abs(x).toFixed(1);
+
 function flag(p){
   if(p.status==='a') return p.low_history ? '<span class="flag n" title="Few league appearances on record">new</span>' : '';
   const cls = p.status==='d' ? 'd' : 'o';
@@ -308,10 +336,17 @@ function render(){
     (state.pos==='All' || p.pos===state.pos) && (!state.team || p.team===state.team) &&
     (!state.q || p.name.toLowerCase().includes(state.q)) && !(state.avail && out(p)) &&
     (p.price==null || (p.price>=state.pmin-1e-9 && p.price<=state.pmax+1e-9)));
-  rows.forEach(p => { p._t = sum(p.ep,hz); });
-  rows.sort((a,b) => state.sort==='next' ? b.ep[0]-a.ep[0] : b._t-a._t);
+  const rep_ = replacement(hz); state.rep = rep_;
+  rows.forEach(p => {
+    p._t = sum(p.ep,hz);
+    p._pa = p._t - rep_[p.pos].pts;
+    p._ex = p.price==null ? null : p.price - rep_[p.pos].price;
+    p._v = p.price==null ? -99 : p._pa / Math.max(p._ex, 1);
+  });
+  rows.sort((a,b) => state.sort==='next' ? b.ep[0]-a.ep[0] : state.sort==='value' ? b._v-a._v : b._t-a._t);
   $('#s-total').setAttribute('aria-pressed', state.sort==='total');
   $('#s-next').setAttribute('aria-pressed', state.sort==='next');
+  $('#s-value').setAttribute('aria-pressed', state.sort==='value');
   $('#s-total').textContent = hz===1 ? 'Next GW' : `Next ${hz} GWs`;
   $('#count').textContent = `${rows.length} player${rows.length===1?'':'s'}`;
   const nf = activeFilters(); $('#fn').hidden = !nf; $('#fn').textContent = nf;
@@ -328,7 +363,9 @@ function render(){
       <span><span class="l1"><span class="nm">${esc(p.name)}</span>${flag(p)}</span>
       <span class="l2"><span class="chip">${p.pos}</span><b>${p.team}</b>${p.price!=null?`<span class="dot">·</span><b>£${p.price.toFixed(1)}</b>`:''}${p.own!=null?`<span class="dot">·</span>${p.own.toFixed(1)}%`:''}</span></span>
       <span class="sc"><span class="strip" aria-hidden="true">${bars}</span><span class="nx">${esc(nx)}</span></span>
-      <span class="tot"><div class="a">${f1(p._t)}</div><div class="b">${hz===1?'':'GW'+d.horizon[0]+' '+f1(p.ep[0])}</div></span></button>
+      <span class="tot">${state.sort==='value'
+        ? `<div class="a">${p.price==null?'-':sg(p._v)}</div><div class="b">${sg(p._pa)} pts</div>`
+        : `<div class="a">${f1(p._t)}</div><div class="b">${hz===1?'':'GW'+d.horizon[0]+' '+f1(p.ep[0])}</div>`}</span></button>
       <div class="dwrap"><div>${open?detail(p):''}</div></div></div>`;
   }).join('') + (rows.length>120?`<div class="empty">Showing the top 120 of ${rows.length}. Use the filters to narrow down.</div>`:'');
   state.intro = false;
@@ -343,7 +380,12 @@ function detail(p){
   const g = p.ep.map((e,i) => `<div><div class="g">GW ${d.horizon[i]}</div><div class="e">${f1(e)}</div><div class="o">${p.fx[i]==='BLANK'?'no game':esc(p.fx[i])}</div></div>`).join('');
   return `<div class="detail"><div><h3>Each gameweek</h3><div class="gws">${g}</div>
     <div class="info">Chance of playing GW ${d.horizon[0]}: ${Math.round(p.p_play[0]*100)}%.${p.sd?` Typical spread: ±${p.sd.toFixed(1)}.`:''}${p.news?' '+esc(p.news):''}</div></div>
-    <div><h3>Where GW ${d.horizon[0]} points come from</h3><div class="comp">${c}</div></div></div>`;
+    <div><h3>Where GW ${d.horizon[0]} points come from</h3><div class="comp">${c}</div></div>
+    ${p.price==null?'':`<div class="valbox"><h3>Value over ${state.vbase==='starter'?'the cheapest likely starter':'a minimum-price player'} (${p.pos})</h3>
+      <div class="vgrid"><div><b>${sg(p._pa)}</b><span>points over ${state.hz===1?'the gameweek':state.hz+' gameweeks'}</span></div>
+      <div><b>${sg(p._ex)}m</b><span>${state.vbase==='starter'?'more than':'above the minimum of'} £${state.rep[p.pos].price.toFixed(1)}m</span></div>
+      <div><b>${sg(p._v)}</b><span>points per £m extra</span></div></div>
+      <div class="info">The baseline is ${state.vbase==='starter'?'the average of the three cheapest fit '+p.pos+'s expected to play':'the best three fit '+p.pos+'s within £0.3m of the minimum price'}: ${f1(state.rep[p.pos].pts)} points over the same period. Extra spend counts as at least £1.0m so tiny price gaps do not inflate the score.</div></div>`}</div>`;
 }
 
 /* ---------- events ---------- */
@@ -355,12 +397,14 @@ document.addEventListener('click', ev => {
   else if(b.dataset.c){ const c=+b.dataset.c; state.open = state.open===c?null:c; render(); const nb=document.querySelector(`[data-c="${c}"]`); if(nb){ nb.focus({preventScroll:true}); if(state.open===c) nb.closest('.item').scrollIntoView({block:'nearest',behavior:'smooth'}); } }
   else if(b.id==='s-total'){ state.sort='total'; render(); }
   else if(b.id==='s-next'){ state.sort='next'; render(); }
+  else if(b.dataset.vb){ state.vbase=b.dataset.vb; document.querySelectorAll('#vb button').forEach(x=>x.setAttribute('aria-pressed',x===b)); render(); }
+  else if(b.id==='s-value'){ state.sort='value'; render(); }
   else if(b.id==='lockbtn'){ store.del('fpl.pw'); location.reload(); }
   else if(b.id==='theme'){ const t = curTheme()==='dark'?'light':'dark'; applyTheme(t); store.set('fpl.theme', t); }
   else if(b.id==='fopen'){ sheet.showModal(); }
   else if(b.id==='done'){ sheet.close(); }
   else if(b.id==='reset'){
-    Object.assign(state,{team:'',hz:state.data.horizon.length,avail:true});
+    Object.assign(state,{team:'',hz:state.data.horizon.length,avail:true,vbase:'floor'}); document.querySelectorAll('#vb button').forEach(x=>x.setAttribute('aria-pressed',x.dataset.vb==='floor'));
     $('#team').value=''; $('#hz').value=state.hz; $('#avail').checked=true; $('#pmin').value=state.lo; $('#pmax').value=state.hi; syncPrice(); render();
   }
 });
