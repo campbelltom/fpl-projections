@@ -1,0 +1,290 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>FPL Projections</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Semi+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#eef1ec; --card:#f8faf6; --ink:#16202a; --ink2:#51606b; --line:#cfd8cb;
+  --turf:#2f6b4f; --turf-soft:#cfe0d5; --flag:#c9452a; --amber:#b7791f; --focus:#1d5fd1;
+  --body:'Barlow',system-ui,sans-serif; --num:'Barlow Semi Condensed','Barlow',system-ui,sans-serif;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]){
+  --paper:#12181d; --card:#192229; --ink:#e7ece6; --ink2:#9aa8a2; --line:#2b3841;
+  --turf:#6fb28d; --turf-soft:#27402f; --flag:#ff7a5c; --amber:#e2a94a; --focus:#7aa7ff;}}
+:root[data-theme=dark]{
+  --paper:#12181d; --card:#192229; --ink:#e7ece6; --ink2:#9aa8a2; --line:#2b3841;
+  --turf:#6fb28d; --turf-soft:#27402f; --flag:#ff7a5c; --amber:#e2a94a; --focus:#7aa7ff;}
+*{box-sizing:border-box}
+html{background:var(--paper)}
+body{margin:0;background:var(--paper);color:var(--ink);font:400 16px/1.45 var(--body);-webkit-text-size-adjust:100%}
+:focus-visible{outline:3px solid var(--focus);outline-offset:2px}
+button,input,select{font:inherit;color:inherit}
+.wrap{max-width:1100px;margin:0 auto;padding:0 16px}
+[hidden]{display:none!important}
+
+/* lock */
+#lock{min-height:100svh;display:grid;place-items:center;padding:24px 16px}
+#lock form{width:100%;max-width:340px}
+#lock h1{font:700 2.4rem/1 var(--num);letter-spacing:-.01em;margin:0 0 6px}
+#lock p{margin:0 0 20px;color:var(--ink2)}
+#lock input[type=password]{width:100%;padding:12px 14px;border:2px solid var(--ink);border-radius:4px;background:var(--card);font-size:1rem}
+#lock .keep{display:flex;align-items:center;gap:8px;margin:12px 0 16px;color:var(--ink2);font-size:.95rem}
+#lock button{width:100%;padding:12px;border:0;border-radius:4px;background:var(--ink);color:var(--paper);font-weight:600;cursor:pointer}
+#lock .err{color:var(--flag);min-height:1.5em;margin-top:10px;font-weight:500}
+
+/* header */
+header.top{padding:22px 0 14px;border-bottom:2px solid var(--ink)}
+header.top .wrap{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 18px}
+header.top h1{font:700 1.9rem/1 var(--num);margin:0;letter-spacing:-.01em}
+header.top .meta{color:var(--ink2);font-size:.93rem}
+header.top .sp{flex:1}
+header.top button.lockbtn{background:none;border:1px solid var(--line);border-radius:4px;padding:5px 10px;color:var(--ink2);cursor:pointer}
+
+/* controls */
+.controls{display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center;padding:14px 0}
+.seg{display:inline-flex;border:1px solid var(--ink);border-radius:4px;overflow:hidden}
+.seg button{border:0;background:transparent;padding:6px 12px;cursor:pointer;font-weight:500}
+.seg button+button{border-left:1px solid var(--ink)}
+.seg button[aria-pressed=true]{background:var(--ink);color:var(--paper)}
+.controls select,.controls input[type=search]{padding:6px 10px;border:1px solid var(--ink);border-radius:4px;background:var(--card)}
+.controls label.chk{display:flex;gap:6px;align-items:center;color:var(--ink2)}
+.controls .sp{flex:1}
+
+/* table */
+.tbl{border-top:1px solid var(--line)}
+.head,.row{display:grid;grid-template-columns:minmax(150px,1.3fr) minmax(130px,1.4fr) minmax(200px,2fr) 64px 64px;gap:0 14px;align-items:center;padding:0 4px}
+.head{font:600 .85rem var(--body);color:var(--ink2);padding-top:8px;padding-bottom:8px;border-bottom:1px solid var(--line)}
+.head button{background:none;border:0;padding:0;cursor:pointer;color:inherit;font:inherit;text-align:right}
+.head button[aria-sort]{color:var(--ink);font-weight:600}
+.head .num{text-align:right}
+.item{border-bottom:1px solid var(--line)}
+.row{width:100%;background:none;border:0;text-align:left;cursor:pointer;padding-top:9px;padding-bottom:9px}
+.row:hover{background:var(--card)}
+.nm{font:600 1.05rem var(--num);display:flex;gap:8px;align-items:baseline;min-width:0}
+.nm .n{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sub{color:var(--ink2);font-size:.85rem}
+.flag{font:600 .75rem var(--body);padding:1px 6px;border-radius:3px;border:1px solid currentColor;white-space:nowrap}
+.flag.d{color:var(--amber)} .flag.o{color:var(--flag)} .flag.n{color:var(--ink2)}
+.fx{font:500 .9rem var(--num);color:var(--ink2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fx b{color:var(--ink);font-weight:600}
+.strip{display:flex;align-items:flex-end;gap:4px;height:38px}
+.strip i{flex:1;background:var(--turf);border-radius:2px 2px 0 0;min-height:2px}
+.strip i.off{background:transparent;border:1px dashed var(--ink2);border-bottom:0;height:8px}
+.strip i.out{opacity:.28}
+.v{font:600 1.15rem var(--num);text-align:right;font-variant-numeric:tabular-nums}
+.v.dim{color:var(--ink2);font-weight:500}
+
+/* detail */
+.detail{padding:6px 4px 18px;display:grid;grid-template-columns:1.2fr 1fr;gap:16px 30px}
+.detail h3{font:600 .95rem var(--body);margin:6px 0 8px;color:var(--ink2)}
+.comp{display:grid;grid-template-columns:130px 1fr 44px;gap:5px 10px;align-items:center;font-size:.92rem}
+.comp .bar{height:10px;background:var(--turf-soft);border-radius:2px;position:relative}
+.comp .bar span{position:absolute;left:0;top:0;bottom:0;background:var(--turf);border-radius:2px}
+.comp .bar span.neg{background:var(--flag)}
+.comp .t{text-align:right;font-family:var(--num);font-weight:600;font-variant-numeric:tabular-nums}
+.gws{display:grid;grid-template-columns:repeat(8,1fr);gap:6px}
+.gws>div{border:1px solid var(--line);border-radius:3px;padding:5px 6px;background:var(--card);text-align:center}
+.gws .g{font-size:.75rem;color:var(--ink2)} .gws .e{font:600 1.1rem var(--num)} .gws .o{font-size:.75rem;color:var(--ink2);min-height:1.1em}
+.info{color:var(--ink2);font-size:.9rem;margin-top:10px}
+
+footer{padding:26px 0 50px;color:var(--ink2);font-size:.88rem;max-width:70ch}
+footer p{margin:0 0 8px}
+.empty{padding:36px 4px;color:var(--ink2)}
+
+@media (max-width:760px){
+  .head{display:none}
+  .row{grid-template-columns:1fr auto auto;grid-template-areas:"nm t n" "st st st";gap:6px 12px}
+  .row .c-nm{grid-area:nm} .row .c-fx{display:none} .row .c-st{grid-area:st} .row .c-t{grid-area:t} .row .c-n{grid-area:n}
+  .detail{grid-template-columns:1fr}
+  .gws{grid-template-columns:repeat(4,1fr)}
+  .comp{grid-template-columns:110px 1fr 40px}
+}
+@media (prefers-reduced-motion:no-preference){ .strip i{transition:height .25s ease} }
+</style>
+</head>
+<body>
+
+<section id="lock" hidden>
+  <form id="lockform" autocomplete="off">
+    <h1>FPL Projections</h1>
+    <p>Enter the password to view this season's projections.</p>
+    <label for="pw" style="position:absolute;left:-9999px">Password</label>
+    <input id="pw" type="password" autocomplete="current-password" required autofocus>
+    <label class="keep"><input id="remember" type="checkbox"> Keep me unlocked on this device</label>
+    <button type="submit">Unlock</button>
+    <div class="err" id="lockerr" role="alert"></div>
+  </form>
+</section>
+
+<main id="app" hidden>
+  <header class="top"><div class="wrap">
+    <h1>FPL Projections</h1>
+    <span class="meta" id="meta"></span>
+    <span class="sp"></span>
+    <button class="lockbtn" id="lockbtn" type="button">Lock</button>
+  </div></header>
+  <div class="wrap">
+    <div class="controls">
+      <div class="seg" id="pos" role="group" aria-label="Position"></div>
+      <select id="team" aria-label="Team"></select>
+      <input id="q" type="search" placeholder="Search player" aria-label="Search player">
+      <select id="hz" aria-label="Gameweeks included"></select>
+      <label class="chk"><input id="avail" type="checkbox" checked> Hide injured and suspended</label>
+    </div>
+    <div class="tbl" role="table" aria-label="Projected points">
+      <div class="head" role="row">
+        <span>Player</span><span>Fixtures</span><span id="hstrip">Points per gameweek</span>
+        <button id="s-total" class="num" type="button">Total</button>
+        <button id="s-next" class="num" type="button"></button>
+      </div>
+      <div id="list"></div>
+    </div>
+    <footer id="foot"></footer>
+  </div>
+</main>
+
+<!--PREVIEW-->
+
+<script>
+(() => {
+'use strict';
+const $ = s => document.querySelector(s);
+const POS = ['All','GKP','DEF','MID','FWD'];
+const state = {pos:'All', team:'', q:'', hz:8, avail:true, sort:'total', open:null, data:null};
+const store = {
+  get(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } },
+  set(k,v){ try{ localStorage.setItem(k,v); }catch(e){} },
+  del(k){ try{ localStorage.removeItem(k); }catch(e){} }
+};
+
+/* ---------- decrypt (AES-GCM, key from PBKDF2) ---------- */
+const b64 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
+async function decrypt(pkg, password){
+  const enc = new TextEncoder();
+  const base = await crypto.subtle.importKey('raw', enc.encode(password), 'PBKDF2', false, ['deriveKey']);
+  const key = await crypto.subtle.deriveKey({name:'PBKDF2', salt:b64(pkg.salt), iterations:pkg.iter, hash:'SHA-256'},
+    base, {name:'AES-GCM', length:256}, false, ['decrypt']);
+  const buf = await crypto.subtle.decrypt({name:'AES-GCM', iv:b64(pkg.iv)}, key, b64(pkg.ct));
+  return JSON.parse(new TextDecoder().decode(buf));
+}
+async function fetchPkg(){
+  const r = await fetch('data/predictions.enc.json', {cache:'no-store'});
+  if(!r.ok) throw new Error('Projections have not been published yet.');
+  return r.json();
+}
+
+/* ---------- boot ---------- */
+async function boot(){
+  const pv = document.getElementById('preview-data');
+  if(pv){ start(JSON.parse(pv.textContent)); return; }
+  $('#lock').hidden = false;
+  const saved = store.get('fpl.pw');
+  if(saved){ try{ start(await decrypt(await fetchPkg(), saved)); return; }catch(e){ store.del('fpl.pw'); } }
+  $('#lockform').addEventListener('submit', async ev => {
+    ev.preventDefault();
+    const pw = $('#pw').value; $('#lockerr').textContent = '';
+    try{
+      const data = await decrypt(await fetchPkg(), pw);
+      if($('#remember').checked) store.set('fpl.pw', pw);
+      start(data);
+    }catch(e){
+      $('#lockerr').textContent = e.message && e.message.startsWith('Projections') ? e.message : 'That password did not work.';
+    }
+  });
+}
+
+/* ---------- app ---------- */
+function start(d){
+  state.data = d; state.hz = d.horizon.length;
+  $('#lock').hidden = true; $('#app').hidden = false;
+  const g0 = d.horizon[0], g1 = d.horizon[d.horizon.length-1];
+  const when = new Date(d.generated_at);
+  $('#meta').textContent = `Gameweeks ${g0} to ${g1}. Updated ${when.toLocaleString('en-GB',{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}`;
+  $('#pos').innerHTML = POS.map(p => `<button type="button" data-p="${p}" aria-pressed="${p===state.pos}">${p==='All'?'All':p}</button>`).join('');
+  const teams = [...new Set(d.players.map(p => p.team))].sort();
+  $('#team').innerHTML = '<option value="">All teams</option>' + teams.map(t => `<option>${t}</option>`).join('');
+  $('#hz').innerHTML = d.horizon.map((g,i) => `<option value="${i+1}">${i===0?'Next gameweek only':'Next '+(i+1)+' gameweeks'}</option>`).join('');
+  $('#hz').value = state.hz;
+  $('#s-next').textContent = 'GW ' + g0;
+  const n = d.notes.length ? d.notes.map(x=>`<p>${esc(x)}</p>`).join('') : '';
+  $('#foot').innerHTML = n + `<p>Projections are expected points under the official FPL scoring, from a team model and a per-player model. Where a player has fewer than five league appearances, treat the number as rough. Model ${esc(d.model_version)}.</p>`;
+  render();
+}
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const out = p => p.status==='i' || p.status==='s' || p.status==='u' || p.status==='n';
+const sum = (a,n) => a.slice(0,n).reduce((x,y)=>x+y,0);
+const f1 = x => x.toFixed(1);
+
+function flag(p){
+  if(p.status==='a') return p.low_history ? '<span class="flag n" title="Few league appearances on record">new</span>' : '';
+  const cls = p.status==='d' ? 'd' : 'o';
+  const txt = {d:'doubt',i:'injured',s:'suspended',u:'unavailable',n:'not in squad'}[p.status] || p.status;
+  return `<span class="flag ${cls}" title="${esc(p.news)}">${txt}</span>`;
+}
+
+function render(){
+  const d = state.data, hz = state.hz;
+  let rows = d.players.filter(p =>
+    (state.pos==='All' || p.pos===state.pos) && (!state.team || p.team===state.team) &&
+    (!state.q || p.name.toLowerCase().includes(state.q)) && !(state.avail && out(p)));
+  rows.forEach(p => { p._t = sum(p.ep,hz); });
+  rows.sort((a,b) => state.sort==='next' ? b.ep[0]-a.ep[0] : b._t-a._t);
+  $('#s-total').setAttribute('aria-sort', state.sort==='total'?'descending':'none');
+  $('#s-next').setAttribute('aria-sort', state.sort==='next'?'descending':'none');
+  $('#s-total').textContent = hz===1 ? 'GW ' + d.horizon[0] : 'Total ' + hz;
+  const shown = rows.slice(0,150);
+  const max = 9;  // fixed scale so bars compare across players and filters
+  if(!shown.length){ $('#list').innerHTML = '<div class="empty">No players match. Clear the search or switch position.</div>'; return; }
+  $('#list').innerHTML = shown.map(p => {
+    const fxs = p.fx.slice(0,Math.min(hz,4)).map((f,i) => i===0?`<b>${esc(f)}</b>`:esc(f)).join('  ');
+    const bars = p.ep.slice(0,hz).map((e,i) => p.fx[i]==='BLANK'
+      ? `<i class="off" title="GW ${d.horizon[i]}: no fixture"></i>`
+      : `<i class="${out(p)?'out':''}" style="height:${Math.max(2,Math.min(100,Math.round(e/max*100)))}%" title="GW ${d.horizon[i]} ${esc(p.fx[i])}: ${f1(e)}"></i>`).join('');
+    const open = state.open===p.code;
+    return `<div class="item"><button class="row" data-c="${p.code}" aria-expanded="${open}">
+      <span class="c-nm"><span class="nm"><span class="n">${esc(p.name)}</span>${flag(p)}</span><span class="sub">${p.team} ${p.pos}${p.price?` · £${p.price.toFixed(1)}m`:''}</span></span>
+      <span class="c-fx fx">${fxs}</span>
+      <span class="c-st strip" aria-hidden="true">${bars}</span>
+      <span class="c-t v">${f1(p._t)}</span><span class="c-n v dim">${f1(p.ep[0])}</span></button>${open?detail(p):''}</div>`;
+  }).join('') + (rows.length>150?`<div class="empty">Showing the top 150 of ${rows.length}. Filter to see more.</div>`:'');
+}
+
+const LABEL = {appearance:'Appearance',goals:'Goals',assists:'Assists',clean_sheet:'Clean sheet',goals_conceded:'Goals conceded',saves:'Saves',defensive:'Defensive contribution',cards:'Cards and own goals',bonus:'Bonus'};
+function detail(p){
+  const d = state.data;
+  const comps = Object.entries(p.comp).filter(([k])=>LABEL[k]);
+  const m = Math.max(1, ...comps.map(([,v])=>Math.abs(v)));
+  const c = comps.map(([k,v]) => `<span>${LABEL[k]}</span><span class="bar"><span class="${v<0?'neg':''}" style="width:${Math.round(Math.abs(v)/m*100)}%"></span></span><span class="t">${v.toFixed(2)}</span>`).join('');
+  const g = p.ep.map((e,i) => `<div><div class="g">GW ${d.horizon[i]}</div><div class="e">${f1(e)}</div><div class="o">${p.fx[i]==='BLANK'?'no game':esc(p.fx[i])}</div></div>`).join('');
+  return `<div class="detail"><div><h3>Where the points come from in GW ${d.horizon[0]}</h3><div class="comp">${c}</div>
+    <div class="info">Chance of playing: ${Math.round(p.p_play[0]*100)}%.${p.sd?` Typical spread around the projection: ±${p.sd.toFixed(1)}.`:''}${p.news?' '+esc(p.news):''}</div></div>
+    <div><h3>Gameweek by gameweek</h3><div class="gws">${g}</div></div></div>`;
+}
+
+/* ---------- events ---------- */
+document.addEventListener('click', ev => {
+  const b = ev.target.closest('button'); if(!b) return;
+  if(b.dataset.p){ state.pos=b.dataset.p; document.querySelectorAll('#pos button').forEach(x=>x.setAttribute('aria-pressed',x===b)); render(); }
+  else if(b.dataset.c){ const c=+b.dataset.c; state.open = state.open===c?null:c; render(); const nb=document.querySelector(`[data-c="${c}"]`); if(nb) nb.focus(); }
+  else if(b.id==='s-total'){ state.sort='total'; render(); }
+  else if(b.id==='s-next'){ state.sort='next'; render(); }
+  else if(b.id==='lockbtn'){ store.del('fpl.pw'); location.reload(); }
+});
+document.addEventListener('input', ev => {
+  const t = ev.target;
+  if(t.id==='q'){ state.q=t.value.trim().toLowerCase(); render(); }
+  else if(t.id==='team'){ state.team=t.value; render(); }
+  else if(t.id==='hz'){ state.hz=+t.value; render(); }
+  else if(t.id==='avail'){ state.avail=t.checked; render(); }
+});
+boot();
+})();
+</script>
+</body>
+</html>

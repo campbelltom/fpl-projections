@@ -1,0 +1,55 @@
+name: Update projections
+
+on:
+  schedule:
+    # The data repo refreshes at 07:30 and 17:30 UTC; run 25 minutes later.
+    - cron: "55 7 * * *"
+    - cron: "55 17 * * *"
+  workflow_dispatch: {}
+  push:
+    branches: [main]
+    paths: ["fplmodel/**", "scripts/**", "config/**", "site/**", ".github/workflows/**"]
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: olbauday/FPL-Core-Insights
+          path: core
+          fetch-depth: 1
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Run model
+        env:
+          FPL_SITE_PASSWORD: ${{ secrets.FPL_SITE_PASSWORD }}
+        run: python scripts/run_production.py core --out _site/data
+      - name: Assemble site
+        run: cp site/index.html _site/index.html
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
