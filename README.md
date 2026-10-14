@@ -10,3 +10,6 @@ Expected FPL points per player for the next 8 gameweeks, rebuilt from scratch.
 
 ## Squad builder
 `site/index.html` picks the best 15 in the browser: 2 GKP / 5 DEF / 5 MID / 3 FWD, budget, max 3 per club, best legal XI each gameweek plus a doubled captain, bench weighted 0.1. Players can be kept or swapped out. `tests/exact_squad.py` solves the same objective exactly with HiGHS to check the heuristic (matched exactly at 3 and 8 gameweeks, within 0.2% at 1).
+
+## Teams and transfers
+`config/teams.json` lists the FPL team ids the site offers (add a friend with one line: `{"id": 123456, "label": "Name"}`). Each run reads those squads from the public FPL endpoints (last finished gameweek's picks plus any transfers already made, selling prices from purchase history, bank, estimated free transfers). The Squad tab then shows the best 0-3 transfers and what each is worth: projected gain over the horizon minus 4 points per transfer beyond the free ones. `tests/exact_squad.py --team` checks the planner against an exact MILP (matched in every case tested). Free transfers are an estimate and can be corrected in the page.

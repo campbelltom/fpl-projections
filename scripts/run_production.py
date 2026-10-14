@@ -22,7 +22,8 @@ sys.path.insert(0, str(ROOT))
 from fplmodel.config import BUDGET, CURRENT_SEASON, HORIZON_GWS, SQUAD, Params  # noqa: E402
 from fplmodel.data import current_gw  # noqa: E402
 from fplmodel.engine import Context  # noqa: E402
-from fplmodel.export import encrypt_json  # noqa: E402
+from fplmodel.export import encrypt_json
+from fplmodel.myteam import build_team  # noqa: E402
 from fplmodel.predict import BonusModel, aggregate_gameweek  # noqa: E402
 from fplmodel.scoring import load_rules  # noqa: E402
 
@@ -98,6 +99,23 @@ def main() -> None:
     d = ctx.predict(asof, CURRENT_SEASON, gws, params, rules, st, bonus, team_now=team_now, overrides=overrides)
     g = aggregate_gameweek(d)
 
+    # manager squads listed in config/teams.json (public FPL endpoints; a failure only marks that team unavailable)
+    teams_out = []
+    tf = ROOT / "config" / "teams.json"
+    if tf.exists() and len(price):
+        try:
+            sp = ps.set_index("code") if "code" in ps.columns else None
+            start = (price - pd.to_numeric(ps.set_index(ps["code"].astype(int))["cost_change_start"], errors="coerce").reindex(price.index).fillna(0) / 10.0).round(1).to_dict() if sp is not None else {}
+        except Exception:  # noqa: BLE001
+            start = {}
+        id2code = {int(i): int(c) for i, c in s.players.set_index("player_id")["player_code"].items()}
+        for t in json.loads(tf.read_text()):
+            try:
+                teams_out.append(build_team(int(t["id"]), t.get("label", str(t["id"])), int(gw0), id2code, price.to_dict(), start))
+            except Exception as e:  # noqa: BLE001
+                teams_out.append({"id": int(t["id"]), "label": t.get("label", str(t["id"])), "error": str(e)[:160]})
+                notes.append(f"Could not load team {t['id']} on this run.")
+    owned = {x['code'] for t in teams_out for x in t.get('squad', [])}
     # ---- assemble output
     teams = s.teams.set_index("code")
     hist = ctx.opp[ctx.opp["minutes"] > 0].groupby("player_code").size()
@@ -124,7 +142,7 @@ def main() -> None:
             "low_history": bool(hist.get(pc, 0) < 5),
         }
         row["total"] = round(float(sum(row["ep"])), 2)
-        if row["total"] >= 0.05:
+        if row["total"] >= 0.05 or int(pc) in owned:
             out_players.append(row)
     out_players.sort(key=lambda r: -r["total"])
     n_low = sum(r["low_history"] for r in out_players)
@@ -134,7 +152,7 @@ def main() -> None:
     roster_pos = players["position"]
     floor = {pos: round(float(price.reindex(roster_pos.index[roster_pos == pos]).min()), 1) for pos in SQUAD if len(price)}
     payload = {
-        "floor": floor, "squad": SQUAD, "budget": BUDGET,
+        "floor": floor, "squad": SQUAD, "budget": BUDGET, "teams": teams_out,
         "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "season": CURRENT_SEASON, "current_gw": int(gw0), "horizon": gws, "model_version": params.version,
         "gw_dates": {int(gw): str(s.matches.loc[s.matches["gameweek"] == gw, "kickoff_time"].min()) for gw in gws},

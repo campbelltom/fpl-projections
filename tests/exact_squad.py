@@ -7,10 +7,13 @@ from scipy.sparse import lil_matrix
 BENCH_W = 0.1
 
 
-def solve(path, hz, budget=100.0, time_limit=240):
+def solve(path, hz, budget=100.0, time_limit=240, team=None, kmax=None):
+    """team: dict from predictions.json teams[] -> plan at most kmax transfers from that squad (owned players priced at their selling price)."""
     d = json.load(open(path)); need = d["squad"]
-    P = [p for p in d["players"] if p["price"] is not None and p["status"] in ("a", "d")]
-    n = len(P); E = np.array([p["ep"][:hz] for p in P]); price = np.round(np.array([p["price"] for p in P]) * 10)
+    P = [p for p in d["players"] if p["price"] is not None and p["status"] != "n"]
+    own = {x["code"]: x["sell"] for x in team["squad"]} if team else {}
+    if team: budget = team["bank"] + sum(own.values())
+    n = len(P); E = np.array([p["ep"][:hz] for p in P]); price = np.round(np.array([own.get(p["code"], p["price"]) for p in P]) * 10)
     nv = n + 2 * n * hz                       # x_i, y_ig, c_ig
     X = lambda i: i; Y = lambda i, g: n + g * n + i; C = lambda i, g: n + n * hz + g * n + i
     c = np.zeros(nv)
@@ -22,6 +25,7 @@ def solve(path, hz, budget=100.0, time_limit=240):
     def add(coefs, l, h): rows.append(coefs); lo.append(l); hi.append(h)
     for pos, k in need.items(): add({X(i): 1 for i, p in enumerate(P) if p["pos"] == pos}, k, k)
     add({X(i): price[i] for i in range(n)}, 0, round(budget * 10))
+    if team: add({X(i): 1 for i, p in enumerate(P) if p["code"] in own}, 15 - kmax, 15)
     for t in {p["team"] for p in P}: add({X(i): 1 for i, p in enumerate(P) if p["team"] == t}, 0, 3)
     for g in range(hz):
         add({Y(i, g): 1 for i in range(n)}, 11, 11)
