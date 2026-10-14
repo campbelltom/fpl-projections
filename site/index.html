@@ -273,7 +273,7 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
 'use strict';
 const $ = s => document.querySelector(s);
 const POS = ['All','GKP','DEF','MID','FWD'];
-const state = {pos:'All', team:'', q:'', hz:8, avail:true, sort:'total', open:null, pmin:0, pmax:99, lo:0, hi:99, data:null, intro:true, vbase:'starter', view:'players', team:-1, ft:1, plan:null, sel:null, budget:100, locked:new Set(), banned:new Set(), squad:null};
+const state = {pos:'All', team:'', q:'', hz:8, avail:true, sort:'total', open:null, pmin:0, pmax:99, lo:0, hi:99, data:null, intro:true, vbase:'starter', view:'players', mine:-1, ft:1, plan:null, sel:null, budget:100, locked:new Set(), banned:new Set(), squad:null};
 const store = {
   get(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } },
   set(k,v){ try{ localStorage.setItem(k,v); }catch(e){} },
@@ -342,6 +342,8 @@ function start(d){
   $('#hz').innerHTML = d.horizon.map((g,i) => `<option value="${i+1}">${i===0?'Next gameweek only':'Next '+(i+1)+' gameweeks'}</option>`).join('');
   $('#hz').value = state.hz; $('#sq-hz').innerHTML = $('#hz').innerHTML; $('#sq-hz').value = state.hz;
   $('#sq-team').innerHTML = '<option value="-1">A fresh squad (wildcard)</option>' + (d.teams||[]).map((t,i) => `<option value="${i}"${t.error?' disabled':''}>${esc(t.label)}${t.name?' \u00b7 '+esc(t.name):''}${t.error?' (not available on this run)':''}</option>`).join('');
+  { const k=(d.teams||[]).findIndex(t=>!t.error); state.mine=k; if(k>=0&&d.teams[k].ft!=null) state.ft=d.teams[k].ft; }
+  $('#sq-team').value=String(state.mine);
   for(const id of ['#pmin','#pmax']){ const e=$(id); e.min=state.lo; e.max=state.hi; }
   $('#pmin').value = state.pmin; $('#pmax').value = state.pmax; syncPrice();
   $('#s-next').textContent = 'GW ' + g0;
@@ -580,7 +582,7 @@ function lineupHTML(sq, hz, ownedSet){
 }
 const horizonLabel = hz => hz===1 ? 'the next gameweek' : hz+' gameweeks';
 const MEDNOTE = 'A red or amber plus marks a player who is injured, suspended or doubtful: his projection already allows for missed games, but injury news changes fast, so use Swap if you disagree.';
-function curTeam(){ return state.team>=0 ? state.data.teams[state.team] : null; }
+function curTeam(){ return state.mine>=0 ? state.data.teams[state.mine] : null; }
 
 function renderSquad(){
   const d = state.data, hz = +$('#sq-hz').value || d.horizon.length, T = curTeam();
@@ -746,7 +748,7 @@ document.addEventListener('input', ev => {
   if(t.id==='q'){ state.q=t.value.trim().toLowerCase(); render(); }
   else if(t.id==='team'){ state.team=t.value; render(); }
   else if(t.id==='hz'){ state.hz=+t.value; render(); }
-  else if(t.id==='sq-team'){ state.team=+t.value; const T=curTeam(); if(T&&T.ft!=null) state.ft=T.ft; state.squad=null; state.plan=null; state.sel=null; renderSquad(); }
+  else if(t.id==='sq-team'){ state.mine=+t.value; const T=curTeam(); if(T&&T.ft!=null) state.ft=T.ft; state.squad=null; state.plan=null; state.sel=null; renderSquad(); }
   else if(t.id==='sq-hz'){ state.squad=null; state.plan=null; state.sel=null; renderSquad(); }
   else if(t.id==='avail'){ state.avail=t.checked; render(); }
   else if(t.id==='pmin'||t.id==='pmax'){ syncPrice(); render(); }
