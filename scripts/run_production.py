@@ -63,7 +63,17 @@ def main() -> None:
     players = s.players.set_index("player_code")
     team_now = players["team_code"].astype(int)
     st = ctx.status[(ctx.status["season"] == CURRENT_SEASON) & (ctx.status["gw"] == gw0 - 1)][["player_code", "status", "chance", "news"]]
-    price = pd.Series(dtype=float)
+    # price (GBP m) and ownership (%): latest snapshot row per player in the data repo (keyed id -> player_code)
+    price, own = pd.Series(dtype=float), pd.Series(dtype=float)
+    try:
+        ps = pd.read_csv(Path(a.src) / "data" / CURRENT_SEASON / "playerstats.csv", usecols=["id", "gw", "now_cost", "selected_by_percent"])
+        ps = ps.sort_values("gw").drop_duplicates("id", keep="last")
+        id2code = s.players.set_index("player_id")["player_code"]
+        ps["code"] = ps["id"].map(id2code)
+        ps = ps.dropna(subset=["code"]).set_index(ps["code"].dropna().astype(int))
+        price, own = ps["now_cost"].astype(float), pd.to_numeric(ps["selected_by_percent"], errors="coerce")
+    except Exception as e:  # noqa: BLE001
+        notes.append(f"Price/ownership snapshot unavailable ({type(e).__name__}).")
     bs = live_bootstrap()
     if bs:
         el = pd.DataFrame(bs["elements"])
@@ -73,6 +83,7 @@ def main() -> None:
         tn = el.set_index("code")["team"].map(tcode)
         team_now = tn.where(tn.notna(), team_now.reindex(tn.index)).dropna().astype(int)
         price = (el.set_index("code")["now_cost"] / 10.0)
+        own = pd.to_numeric(el.set_index("code")["selected_by_percent"], errors="coerce")
         rules = load_rules(live=True)
     else:
         notes.append("Live FPL API not reachable on this run: status/news from the latest data snapshot.")
@@ -100,7 +111,8 @@ def main() -> None:
         pl = players.loc[pc]
         row = {
             "code": int(pc), "name": pl["web_name"], "pos": pl["position"], "team": teams.loc[int(team_now[pc]), "short_name"],
-            "price": float(price.get(pc, np.nan)) if len(price) else None,
+            "price": float(price[pc]) if pc in price.index and pd.notna(price[pc]) else None,
+            "own": float(own[pc]) if pc in own.index and pd.notna(own[pc]) else None,
             "status": stx["status"].get(pc, "a"), "news": str(stx["news"].get(pc) if pd.notna(stx["news"].get(pc)) else "")[:120],
             "ep": [round(float(x), 2) if pd.notna(x) else 0.0 for x in grp["ep"]],
             "p_play": [round(float(x), 2) if pd.notna(x) else 0.0 for x in grp["p_play"]],
