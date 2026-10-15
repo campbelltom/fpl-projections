@@ -188,7 +188,7 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
 .mv .o{color:var(--ink2)} .mv .i{font-weight:600;text-align:right} .mv .ar{color:var(--ink2)}
 .mv small{display:block;color:var(--ink2);font:500 .72rem var(--num)}
 .item.mine .row{background:color-mix(in srgb,var(--p,#888) 14%,transparent);box-shadow:inset 3px 0 0 var(--p,#888)}
-.luctl{display:flex;gap:8px;align-items:end;margin-bottom:6px}.luctl label{flex:1;font:600 .7rem var(--num);color:var(--ink2)}.luctl select{width:100%;height:36px}
+.luctl{display:flex;gap:8px;align-items:end;margin-bottom:6px}.luctl label{flex:1;font:600 .7rem var(--num);color:var(--ink2)}.luctl select{width:100%;height:40px;border:0;border-radius:12px;background:var(--card);padding:0 10px;font-size:16px;color:var(--ink)}
 .luctl button{height:36px;border:0;border-radius:10px;background:var(--card);padding:0 12px;font:600 .78rem var(--num);color:var(--ink)}
 .lc2{background:var(--card);border-radius:14px;margin-bottom:5px;overflow:hidden}
 .lh{all:unset;box-sizing:border-box;cursor:pointer;display:flex;align-items:center;gap:8px;width:100%;padding:9px 12px;min-height:40px}
@@ -198,11 +198,12 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
 .lq.hi{background:color-mix(in srgb,#2a9d5c 22%,transparent)}.lq.mid{background:color-mix(in srgb,#e0a21a 26%,transparent)}.lq.lo{background:color-mix(in srgb,#d64545 24%,transparent)}
 .lbody{padding:0 12px 8px}.lg{display:grid;grid-template-columns:34px 1fr;gap:6px;padding:4px 0;border-top:1px solid var(--line)}
 .lk{font:700 .62rem var(--num);color:var(--ink2);padding-top:5px}
-.lr{display:grid;grid-template-columns:minmax(0,1fr) 90px 36px;gap:6px;align-items:center;min-height:24px}
+.lr{display:grid;grid-template-columns:minmax(0,1fr) 70px 34px 34px;gap:6px;align-items:center;min-height:24px}
 .lr .ln{font:600 .84rem var(--num);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.lr b{font:700 .74rem var(--num);text-align:right}
 .lr.out{opacity:.55}.lr.out .ln{font-weight:500}.lr.mine .ln{box-shadow:inset 3px 0 0 var(--ink);padding-left:6px}
 .lb{height:7px;border-radius:4px;background:var(--line);overflow:hidden;display:block}.lb i{display:block;height:100%;border-radius:4px}
 .lb.hi i{background:#2a9d5c}.lb.mid i{background:#e0a21a}.lb.lo i{background:#d64545}
+.lr small{font:500 .7rem var(--num);color:var(--ink2);text-align:right}.lm{font:600 .72rem var(--num);color:var(--ink2)}
 .lr .med{position:static;display:inline-grid;width:12px;height:12px;border-radius:6px;vertical-align:-2px;margin-left:4px}.lr .med svg{width:7px;height:7px}
 .sqnote{font-size:.78rem;color:var(--ink2);margin:0 2px 10px}
 .gwt{overflow-x:auto;background:var(--card);border-radius:14px;margin-bottom:8px}
@@ -736,27 +737,28 @@ function predictXI(list, g){
   for(const p of rest){ if(xi.length>=11) break; if(cnt[p.pos]<LU_MAX[p.pos]){ xi.push(p); cnt[p.pos]++; } }
   return {xi, by, shape:`${cnt.DEF}-${cnt.MID}-${cnt.FWD}`};
 }
-const luBar = v => `<span class="lb ${v>=.8?'hi':v>=.5?'mid':'lo'}"><i style="width:${Math.round(v*100)}%"></i></span><b>${Math.round(v*100)}%</b>`;
+const luBar = (v,m) => `<span class="lb ${v>=.8?'hi':v>=.5?'mid':'lo'}"><i style="width:${Math.round(v*100)}%"></i></span><b>${Math.round(v*100)}%</b><small>${Math.round(m)}'</small>`;
 function renderLineups(){
   const d = state.data, g = Math.min(state.lug, d.horizon.length-1);
   const T0 = curTeam(), mine = new Set(T0&&!T0.error&&T0.squad ? T0.squad.map(x=>x.code) : []);
   const teams = new Map();
   d.players.forEach(p => { if(p.fx[g]!=='BLANK' && p.p60 && p.p60[g]>0.03){ if(!teams.has(p.team)) teams.set(p.team,[]); teams.get(p.team).push(p); } });
+  d.players.forEach(p => { if(!p.mins) p.mins = p.p60.map(v=>v*84); });
   const cards = [...teams.keys()].sort().map(t => {
     const list = teams.get(t), {xi,by,shape} = predictXI(list,g), inXI = new Set(xi.map(p=>p.code));
     const fxs = {}; list.forEach(p=>{ fxs[p.fx[g]] = (fxs[p.fx[g]]||0)+1; });
     const fx = Object.entries(fxs).sort((a,b)=>b[1]-a[1])[0][0];
-    const cert = xi.reduce((a,p)=>a+(p.p60[g]||0),0)/11, open = state.luo.has(t);
-    const row = (p,out) => `<div class="lr${out?' out':''}${mine.has(p.code)?' mine':''}"><span class="ln">${esc(p.name)}${medical(p)}</span>${luBar(p.p60[g])}</div>`;
+    const xm = xi.reduce((a,p)=>a+(p.mins[g]||0),0), cert = xi.reduce((a,p)=>a+(p.p60[g]||0),0)/11, open = state.luo.has(t);
+    const row = (p,out) => `<div class="lr${out?' out':''}${mine.has(p.code)?' mine':''}"><span class="ln">${esc(p.name)}${medical(p)}</span>${luBar(p.p60[g],p.mins[g])}</div>`;
     const sect = ['GKP','DEF','MID','FWD'].map(k => {
       const st = xi.filter(p=>p.pos===k), ch = by[k].filter(p=>!inXI.has(p.code) && p.p60[g]>=0.08).slice(0,3);
       return `<div class="lg"><span class="lk">${k}</span><div>${st.map(p=>row(p,false)).join('')}${ch.map(p=>row(p,true)).join('')}</div></div>`;
     }).join('');
-    return `<div class="lc2${open?' open':''}"><button type="button" class="lh" data-lut="${t}" aria-expanded="${open}"><b>${t}</b><span class="lf">${esc(fx)}</span><span class="ls">${shape}</span><span class="lq ${cert>=.8?'hi':cert>=.65?'mid':'lo'}">${Math.round(cert*100)}% sure</span></button>${open?`<div class="lbody">${sect}</div>`:''}</div>`;
+    return `<div class="lc2${open?' open':''}"><button type="button" class="lh" data-lut="${t}" aria-expanded="${open}"><b>${t}</b><span class="lf">${esc(fx)}</span><span class="ls">${shape}</span><span class="lm" title="Expected minutes from these eleven">${Math.round(xm)}'</span><span class="lq ${cert>=.8?'hi':cert>=.65?'mid':'lo'}">${Math.round(cert*100)}% sure</span></button>${open?`<div class="lbody">${sect}</div>`:''}</div>`;
   }).join('');
   const opts = d.horizon.map((h,i)=>`<option value="${i}"${i===g?' selected':''}>GW ${h}</option>`).join('');
   $('#lineupview').innerHTML = `<div class="luctl"><label>Gameweek<select id="lu-gw" aria-label="Gameweek">${opts}</select></label><button type="button" id="lu-all">${state.luo.size?'Collapse all':'Expand all'}</button></div>
-    <p class="sqnote">Predicted XI for each club: the players most likely to play 60 minutes or more, shown with that chance. Faded rows are the players competing for a place. A low "sure" figure means the XI is hard to call.</p>${cards}`;
+    <p class="sqnote">Predicted XI for each club: the players most likely to play 60 minutes or more, shown with that chance. Faded rows are the players competing for a place. A low "sure" figure means the XI is hard to call. The small figure is the expected minutes (the club total is for the eleven shown, out of 990).</p>${cards}`;
 }
 /* ---------- penalties ---------- */
 function penInfo(p){

@@ -151,6 +151,7 @@ def main() -> None:
             "ep": [round(float(x), 2) if pd.notna(x) else 0.0 for x in grp["ep"]],
             "p_play": [round(float(x), 2) if pd.notna(x) else 0.0 for x in grp["p_play"]],
             "p60": [round(float(min(1.0, x)), 2) if pd.notna(x) else 0.0 for x in grp["p60_eff"]],
+            "mins": [round(float(x), 0) if pd.notna(x) else 0.0 for x in grp["m_exp"]],
             "fx": [", ".join(fx.get((pc, gw), [])) or "BLANK" for gw in gws],
             "comp": {k[4:]: round(float(grp["pts_" + k[4:]].iloc[0]), 2) for k in
                      ["pts_appearance", "pts_goals", "pts_assists", "pts_clean_sheet", "pts_goals_conceded", "pts_saves",
