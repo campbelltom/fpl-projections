@@ -219,6 +219,30 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
 .gwt .act .tb{display:flex;gap:6px;margin-top:6px}
 .gwt .act .tb button{height:34px;padding:0 12px;border:0;border-radius:9px;background:var(--card);font:600 .78rem var(--num);color:var(--ink)}
 .gwt .act .tb button[aria-pressed=true]{background:var(--ink);color:var(--bg)}
+.chips{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px}
+.cc{border-radius:14px;padding:9px 11px;background:var(--card);display:flex;flex-direction:column;gap:1px;border-left:4px solid var(--ink)}
+.cc b{font:700 .72rem var(--body);text-transform:uppercase;letter-spacing:.04em;color:var(--ink2)}
+.cc span{font:600 .9rem var(--num);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cc em{font:700 1.15rem var(--num);font-style:normal}
+.cc.tcw{border-left-color:var(--warn)} .cc.bbw{border-left-color:var(--good,#2a9d5c)}
+.gwt th u{display:block;text-decoration:none;font:700 .5rem/1 var(--num);border-radius:3px;padding:1px 2px;margin:1px 2px 0;background:var(--warn);color:#000}
+.gwt th.bbw u:last-child{background:var(--good,#2a9d5c);color:#fff}
+.gwt th.tcw.bbw u:first-child{background:var(--warn);color:#000}
+.gwt .c.cap.tcc{background:var(--warn);color:#000}.gwt .c.cap.tcc i{color:#000}
+.tohd{margin:12px 2px 6px}.tohd b{display:block;font:700 1rem var(--num)}.tohd span{font-size:.78rem;color:var(--ink2)}
+.to{background:var(--card);border-radius:14px;margin-bottom:5px;overflow:hidden;border-left:4px solid var(--p)}
+.to .tr{all:unset;box-sizing:border-box;cursor:pointer;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center;width:100%;padding:8px 10px}
+.to .tr:focus-visible{outline:3px solid var(--focus);outline-offset:-3px}
+.to .tl{display:grid;gap:2px;min-width:0}
+.to .in,.to .ot{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;position:relative}
+.to em{font:700 .55rem var(--num);font-style:normal;color:var(--ink2);display:inline-block;width:26px}
+.to .in b{font:700 .92rem var(--num)} .to .ot b{font:500 .82rem var(--num);color:var(--ink2)}
+.to small{font:500 .68rem var(--num);color:var(--ink2)}
+.to .tg{text-align:right}.to .tg b{display:block;font:700 1.1rem var(--num);font-variant-numeric:tabular-nums}
+.to .med{position:static;display:inline-grid;width:14px;height:14px;border-radius:7px;vertical-align:-2px;margin-right:3px}.to .med svg{width:8px;height:8px}
+.od{padding:2px 10px 10px;border-top:1px solid var(--line)}.od p{font-size:.78rem;color:var(--ink2);margin:6px 0 0}
+.ow{display:grid;grid-template-columns:repeat(auto-fit,minmax(40px,1fr));gap:4px;padding-top:6px}
+.ow span{text-align:center}.ow small{display:block;font-size:.58rem}.ow b{font:600 .8rem var(--num);color:var(--ink2)}.ow b.up{color:var(--good,#2a9d5c)}
 .pl{display:flex;gap:5px;margin-bottom:5px;justify-content:center}
 .pl h4{display:none}
 .tile{flex:1;max-width:100px;min-width:0;background:var(--card);border-radius:12px;padding:6px 6px 5px;position:relative;border-top:3px solid var(--p);text-align:center}
@@ -305,7 +329,7 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
 'use strict';
 const $ = s => document.querySelector(s);
 const POS = ['All','GKP','DEF','MID','FWD'];
-const state = {pos:'All', team:'', q:'', hz:8, avail:true, sort:'total', open:null, pmin:0, pmax:99, lo:0, hi:99, data:null, intro:true, vbase:'starter', view:'players', mine:-1, ft:1, plan:null, sel:null, budget:100, locked:new Set(), banned:new Set(), squad:null, srow:null};
+const state = {pos:'All', team:'', q:'', hz:8, avail:true, sort:'total', open:null, pmin:0, pmax:99, lo:0, hi:99, data:null, intro:true, vbase:'starter', view:'players', mine:-1, ft:1, plan:null, sel:null, budget:100, locked:new Set(), banned:new Set(), squad:null, srow:null, opt:null};
 const store = {
   get(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } },
   set(k,v){ try{ localStorage.setItem(k,v); }catch(e){} },
@@ -380,7 +404,7 @@ function start(d){
   $('#pmin').value = state.pmin; $('#pmax').value = state.pmax; syncPrice();
   $('#s-next').textContent = 'GW ' + g0;
   const n = d.notes.length ? d.notes.map(x=>`<p>${esc(x)}</p>`).join('') : '';
-  $('#foot').innerHTML = n + `<p>Expected points under the official FPL scoring, from a team model plus a per-player model. Players with fewer than five league appearances are marked new: treat their numbers as rough. Model ${esc(d.model_version)}.</p><p><b>Value</b> is how many points a player adds over a minimum-price player in his position, per £m spent above that minimum. Every squad needs 2 goalkeepers, 5 defenders, 5 midfielders and 3 forwards, so at least £${minSquad().toFixed(1)}m is spent before you choose anyone: the other £${(d.budget-minSquad()).toFixed(1)}m is what value is measured against.</p>`;
+  $('#foot').innerHTML = n + `<p>Expected points under the official FPL scoring, from a team model plus a per-player model. Players with fewer than five league appearances are marked new: treat their numbers as rough. Model ${esc(d.model_version)}.</p>`;
   render();
 }
 
@@ -488,7 +512,8 @@ function detail(p){
    Solved by randomised restarts + best-improvement swaps over a pruned candidate list; tests/exact_squad.py compares it with an exact MILP (gap well under 1%). */
 const MINXI = {DEF:3, MID:2, FWD:1};
 const BENCH_W = 0.1;
-function lineupScore(sq, E, hz){            // sq: array of pool indexes; E[i]: array of ep per gw
+function lineupScore(sq, E, hz, bw){
+  if(bw===undefined) bw = BENCH_W;            // sq: array of pool indexes; E[i]: array of ep per gw
   let tot = 0;
   for(let g=0; g<hz; g++){
     const by = {GKP:[],DEF:[],MID:[],FWD:[]};
@@ -502,7 +527,7 @@ function lineupScore(sq, E, hz){            // sq: array of pool indexes; E[i]: 
     }
     rest.sort((a,b)=>b-a);
     for(let j=0;j<rest.length;j++){ if(j<4){ xi+=rest[j]; if(rest[j]>cap) cap=rest[j]; } else bench+=rest[j]; }
-    tot += xi + cap + BENCH_W*bench;
+    tot += xi + cap + bw*bench;
   }
   return tot;
 }
@@ -609,14 +634,18 @@ function lineupHTML(sq, hz, ownedSet){
   const capCount = new Map(); G.forEach(x => capCount.set(x.cap.code,(capCount.get(x.cap.code)||0)+1));
   const topCap = rows.reduce((a,p) => (capCount.get(p.code)||0)>(capCount.get(a.code)||0)?p:a, rows[0]);
   const xiPts = G.reduce((t,x)=>t+x.pts,0);
-  const head = `<tr><th class="nm">Player</th>${G.map((x,g)=>`<th>${d.horizon[g]}</th>`).join('')}<th class="tt">XI pts</th></tr>`;
+  // chips: triple captain adds one more copy of the captain; bench boost adds the four bench players
+  let tc = {g:0,gain:-1}, bb = {g:0,gain:-1};
+  G.forEach((x,g) => { const tg = x.cap.ep[g]; if(tg>tc.gain) tc = {g, gain:tg, p:x.cap};
+    const bg = sq.filter(p=>!x.xi.has(p.code)).reduce((t,p)=>t+p.ep[g],0); if(bg>bb.gain) bb = {g, gain:bg}; });
+  const head = `<tr><th class="nm">Player</th>${G.map((x,g)=>`<th class="${g===tc.g?'tcw ':''}${g===bb.g?'bbw':''}">${d.horizon[g]}${g===tc.g?'<u>TC</u>':''}${g===bb.g?'<u>BB</u>':''}</th>`).join('')}<th class="tt">XI pts</th></tr>`;
   const body = rows.map(p => {
     let starts = 0, pts = 0; const off = [];
     const cells = G.map((x,g) => {
       const st = x.xi.has(p.code), cp = x.cap.code===p.code, e = p.ep[g];
       if(st){ starts++; pts += e*(cp?2:1); } else if(p.fx[g]!=='BLANK') off.push({g, e, cut:p.pos==='GKP'?x.gk:x.cut});
       if(p.fx[g]==='BLANK') return `<td class="c off" title="GW ${d.horizon[g]}: no fixture"><b>-</b></td>`;
-      return `<td class="c ${st?'s':'b'}${cp?' cap':''}" title="GW ${d.horizon[g]} ${esc(p.fx[g])}: ${f1(e)} points, ${cp?'captain':st?'in the XI':'on the bench'}"><b>${f1(e)}</b><i>${esc(p.fx[g])}</i></td>`;
+      return `<td class="c ${st?'s':'b'}${cp?' cap':''}${cp&&g===tc.g?' tcc':''}" title="GW ${d.horizon[g]} ${esc(p.fx[g])}: ${f1(e)} points, ${cp?'captain':st?'in the XI':'on the bench'}"><b>${f1(e)}</b><i>${esc(p.fx[g])}</i></td>`;
     }).join('');
     const isNew = ownedSet && !ownedSet.has(p.code), lk = state.locked.has(p.code), open = state.srow===p.code;
     const why = starts===hz ? `Starts every week.` : starts===0 ? `Never makes the XI over this period.` :
@@ -628,11 +657,13 @@ function lineupHTML(sq, hz, ownedSet){
   const foot = `<tr class="ft"><th class="nm">XI total</th>${G.map(x=>`<td><b>${f1(x.pts)}</b></td>`).join('')}<td class="tt"><b>${f1(xiPts)}</b></td></tr>
     <tr class="ft2"><th class="nm">Captain</th>${G.map(x=>`<td title="${esc(x.cap.name)}">${esc(short(x.cap.name).slice(0,5))}</td>`).join('')}<td></td></tr>
     <tr class="ft2"><th class="nm">Shape</th>${G.map(x=>`<td>${x.shape}</td>`).join('')}<td></td></tr>`;
-  return {xiPts, cap:topCap, capN:capCount.get(topCap.code)||0, html:`<div class="gwt"><table><thead>${head}</thead><tbody>${body}</tbody><tfoot>${foot}</tfoot></table></div>
-    <p class="sqnote">How each week is chosen: the XI is the best legal eleven by projected points (one goalkeeper, at least 3 defenders, 2 midfielders and 1 forward), the top scorer wears the armband and counts double. Shaded cells start, faded cells are on the bench, and the small text is the opponent, with (H) home or (A) away. A boxed cell is the captain. Tap a player for his weekly reasoning, Keep and Swap.</p>`};
+  const chips = `<div class="chips"><div class="cc tcw"><b>Triple captain</b><span>GW ${d.horizon[tc.g]}: ${esc(tc.p.name)}</span><em>+${f1(tc.gain)} points</em></div>
+    <div class="cc bbw"><b>Bench boost</b><span>GW ${d.horizon[bb.g]}</span><em>+${f1(bb.gain)} points</em></div></div>`;
+  return {xiPts, tc, bb, cap:topCap, capN:capCount.get(topCap.code)||0, html:`${chips}<div class="gwt"><table><thead>${head}</thead><tbody>${body}</tbody><tfoot>${foot}</tfoot></table></div>
+    <p class="sqnote">How each week is chosen: the XI is the best legal eleven by projected points (one goalkeeper, at least 3 defenders, 2 midfielders and 1 forward), the top scorer wears the armband and counts double. Shaded cells start, faded cells are on the bench, and the small text is the opponent, with (H) home or (A) away. A boxed cell is the captain. TC and BB mark the best week for each chip, using this squad as it stands. Tap a player for his weekly reasoning, Keep and Swap.</p>`};
 }
 const horizonLabel = hz => hz===1 ? 'the next gameweek' : hz+' gameweeks';
-const MEDNOTE = 'A red or amber plus marks a player who is injured, suspended or doubtful: his projection already allows for missed games, but injury news changes fast, so use Swap if you disagree.';
+const MEDNOTE = 'A red or amber plus marks a player who is injured, suspended or doubtful: his projection already allows for missed games, but injury news changes fast, so check before acting.';
 function curTeam(){ return state.mine>=0 ? state.data.teams[state.mine] : null; }
 
 function renderSquad(){
@@ -640,8 +671,8 @@ function renderSquad(){
   $('#b-out').textContent = '£' + state.budget.toFixed(1) + 'm';
   $('#ft-out').textContent = state.ft;
   $('#b-lab').hidden = !!T; $('#ft-lab').hidden = !T;
-  $('#sq-build').textContent = T ? 'Plan transfers' : 'Build best squad';
-  if(T){ return renderPlan(hz, T); }
+  $('#sq-build').hidden = !!T; $('#sq-build').textContent = 'Build best squad';
+  if(T){ return renderTeam(hz, T); }
   if(!state.squad){ $('#sqout').innerHTML = '<div class="empty">Press Build best squad to pick the 15 players with the most projected points under the budget, club and position rules.</div>'; return; }
   const L = lineupHTML(state.squad.squad, hz);
   $('#sqout').innerHTML = `<div class="sqsum"><div><b>${f1(L.xiPts)}</b><span>points from the XI with the captain doubled, over ${horizonLabel(hz)}</span></div>
@@ -650,104 +681,63 @@ function renderSquad(){
     <p class="sqnote">${MEDNOTE}</p>${L.html}`;
 }
 
-/* ---------- transfers: what is a transfer worth? ---------- */
-const HIT = 4;
-function planTransfers(data, hz, team, banned){
-  const owned = new Map(team.squad.map(x => [x.code, x.sell]));
-  const pool = data.players.filter(p => p.price!=null && (owned.has(p.code) || (!banned.has(p.code) && p.status!=='n')))
-    .map((p,k) => ({code:p.code, pos:p.pos, team:p.team, price:Math.round((owned.has(p.code)?owned.get(p.code):p.price)*10), k, p, own:owned.has(p.code), tot:sum(p.ep,hz)}));
-  const sq0 = pool.filter(o => o.own);
-  if(sq0.length!==15) return {error:'Some players in this team are missing from the projections, so it cannot be planned on this run.'};
-  const E = pool.map(o => o.p.ep.slice(0,hz));
-  const B = Math.round(team.bank*10) + sq0.reduce((t,o)=>t+o.price,0);
-  const byPos = {}; pool.forEach(o => (byPos[o.pos] = byPos[o.pos] || []).push(o));
-  const score = q => lineupScore(q, E, hz);
-  const ok = q => { const c={}; let sp=0; for(const o of q){ sp+=o.price; c[o.team]=(c[o.team]||0)+1; if(c[o.team]>3) return false; } return sp<=B; };
-  const start = {sq:sq0.slice(), touched:new Set(), score:score(sq0)};
-  const free = (st,a) => !st.touched.has(a) && !state.locked.has(st.sq[a].code);
-  function singles(st){
-    let best = null;
-    for(let a=0;a<15;a++){ if(!free(st,a)) continue;
-      const out = st.sq[a];
-      for(const o of byPos[out.pos]){ if(st.sq.includes(o)) continue;
-        st.sq[a] = o;
-        if(ok(st.sq)){ const v = score(st.sq); if(!best || v>best.score) best = {sq:st.sq.slice(), touched:new Set([...st.touched,a]), score:v}; }
-      }
-      st.sq[a] = out; }
-    return best;
-  }
-  function pairs(st){          // two transfers at once: catches "downgrade one player to afford an upgrade on another"
-    const L = {};
-    for(let a=0;a<15;a++){ if(!free(st,a)) continue;
-      const out = st.sq[a], c = [];
-      for(const o of byPos[out.pos]){ if(st.sq.includes(o)) continue; st.sq[a]=o; c.push([score(st.sq),o]); }
-      st.sq[a] = out; c.sort((x,y)=>y[0]-x[0]);
-      const top = c.slice(0,22).map(x=>x[1]);
-      const cheap = c.filter(x=>x[1].price<=out.price && !top.includes(x[1])).slice(0,8).map(x=>x[1]);
-      L[a] = [...top, ...cheap];
+/* ---------- your team: squad, chips and the best single transfers ---------- */
+const HIT = 4, NOPT = 30;
+function transferOptions(data, hz, T, sq){
+  const owned = new Map(T.squad.map(x => [x.code, x.sell]));
+  const E = data.players.map(p => p.ep.slice(0,hz));
+  const idx = new Map(data.players.map((p,k)=>[p.code,k]));
+  const ob = p => ({pos:p.pos, k:idx.get(p.code), p});
+  const cur = sq.map(ob), base = lineupScore(cur, E, hz, 0);
+  const bank = T.bank, cnt = {}; sq.forEach(p => cnt[p.team]=(cnt[p.team]||0)+1);
+  const cands = data.players.filter(p => p.price!=null && !owned.has(p.code) && !state.banned.has(p.code) && p.status!=='n');
+  const out = [];
+  cur.forEach((o,a) => {
+    const po = o.p; if(state.locked.has(po.code)) return;
+    const sell = owned.get(po.code);
+    for(const p of cands){
+      if(p.pos!==po.pos) continue;
+      if(p.price > bank + sell + 1e-9) continue;
+      if(p.team!==po.team && (cnt[p.team]||0) >= 3) continue;
+      const q = cur.slice(); q[a] = ob(p);
+      const gain = lineupScore(q, E, hz, 0) - base;
+      if(gain > 0.005) out.push({out:po, inn:p, sell, gain, left:bank+sell-p.price});
     }
-    const slots = Object.keys(L).map(Number); let best = null;
-    for(let i=0;i<slots.length;i++) for(let j=i+1;j<slots.length;j++){
-      const a=slots[i], b=slots[j], oa=st.sq[a], ob=st.sq[b];
-      for(const x of L[a]) for(const y of L[b]){ if(x===y) continue;
-        st.sq[a]=x; st.sq[b]=y;
-        if(ok(st.sq)){ const v = score(st.sq); if(!best || v>best.score) best = {sq:st.sq.slice(), touched:new Set([...st.touched,a,b]), score:v}; }
-      }
-      st.sq[a]=oa; st.sq[b]=ob;
-    }
-    return best;
-  }
-  const pick = (...c) => c.filter(Boolean).sort((x,y)=>y.score-x.score)[0] || null;
-  const r1 = singles(start);
-  const r2 = pick(pairs(start), r1 && singles(r1));
-  const r3 = pick(r2 && singles(r2), r1 && pairs(r1));
-  const rs = [start];
-  for(const r of [r1,r2,r3]){ const prev = rs[rs.length-1]; rs.push(r && r.score>prev.score+1e-9 ? r : prev); }
-  const moves = r => [...r.touched].sort((a,b)=>a-b).map(a => ({out:sq0[a].p, inn:r.sq[a].p, outSell:sq0[a].price/10, inPrice:r.sq[a].price/10}));
-  return {rs:rs.map(r => ({squad:r.sq.map(o=>o.p), score:r.score, k:r.touched.size, moves:moves(r)})), base:start.score, B:B/10, ownedSet:new Set(owned.keys())};
+  });
+  out.sort((x,y)=>y.gain-x.gain);
+  return {base, opts:out.slice(0,NOPT), total:out.length};
 }
-
-function renderPlan(hz, T){
+function weekly(sq, hz){ const r=[]; for(let g=0; g<hz; g++) r.push(pickGW(sq,g).pts); return r; }
+function renderTeam(hz, T){
   const d = state.data, out = $('#sqout');
   if(T.error){ out.innerHTML = `<div class="empty">Team ${esc(T.label)} could not be loaded on the last update (${esc(T.error)}). It will be tried again on the next run.</div>`; return; }
+  const by = new Map(d.players.map(p=>[p.code,p])), sq = T.squad.map(x=>by.get(x.code));
+  if(sq.length!==15 || sq.some(p=>!p)){ out.innerHTML = '<div class="empty">Some players in this team are missing from the projections, so it cannot be shown on this run.</div>'; return; }
+  const owned = new Set(T.squad.map(x=>x.code)), L = lineupHTML(sq, hz, owned);
   const head = `<p class="sqnote"><b>${esc(T.name||T.label)}</b>${T.manager?`, ${esc(T.manager)}`:''}. Bank £${T.bank.toFixed(1)}m. Squad as of gameweek ${T.gw}${T.pending?`, with ${T.pending} transfer${T.pending>1?'s':''} already made for gameweek ${d.horizon[0]}`:''}. Free transfers are an estimate, so check the number above.</p>`;
-  const pl = state.plan;
-  if(!pl){ out.innerHTML = head + '<div class="empty">Press Plan transfers to see what each extra transfer is worth over the horizon, after the 4 point hit for any beyond your free ones.</div>'; return; }
-  if(pl.error){ out.innerHTML = head + `<div class="empty">${esc(pl.error)}</div>`; return; }
-  const ft = state.ft;
-  const rows = pl.rs.map((r,i) => { const gain = r.score-pl.base, hit = HIT*Math.max(0,r.k-ft); return {i, k:r.k, gain, hit, net:gain-hit}; });
-  const bestI = rows.reduce((b,r) => r.net>b.net+1e-9 ? r : b, rows[0]).i;
-  if(state.sel==null || state.sel>=rows.length) state.sel = bestI;
-  const sel = pl.rs[state.sel];
-  const sg2 = x => (x>=0?'+':'−')+Math.abs(x).toFixed(1);
-  const tbl = rows.map(r => `<button class="pr" type="button" data-sel="${r.i}" aria-pressed="${r.i===state.sel}">
-      <span class="k">${r.k===0?'Hold':r.k+(r.k===1?' transfer':' transfers')}${r.i===bestI?'<span class="best">BEST</span>':''}<small>${r.k===0?'make no changes':r.hit?`${r.k-ft} over your ${ft} free: costs ${r.hit} points`:'covered by free transfers'}</small></span>
-      <span class="g">${r.k===0?'':sg2(r.gain)}</span><span class="h">${r.hit?'−'+r.hit:''}</span><span class="n">${r.k===0?'0.0':sg2(r.net)}</span></button>`).join('');
-  const mv = sel.moves.length ? sel.moves.map(m => `<div class="mv"><span class="o">${esc(m.out.name)} <small>${m.out.team} ${m.out.pos} · sells £${m.outSell.toFixed(1)}m · ${f1(sum(m.out.ep,hz))} pts</small></span><span class="ar">to</span><span class="i">${esc(m.inn.name)} <small>${m.inn.team} ${m.inn.pos} · £${m.inPrice.toFixed(1)}m · ${f1(sum(m.inn.ep,hz))} pts</small></span></div>`).join('') : '<div class="o">No changes: your current squad is already the best use of this week.</div>';
-  const L = lineupHTML(sel.squad, hz, pl.ownedSet);
-  const wild = pl.wild ? `<p class="sqnote">With the same money and no limit on changes, the best possible squad would project ${sg2(pl.wild.score-pl.base)} points more than yours over ${horizonLabel(hz)}: the most a wildcard could add. A transfer is worth making when its net is above zero.</p>` : '<p class="sqnote">Working out the wildcard ceiling...</p>';
-  out.innerHTML = head + `<div class="plan"><div class="ph">Projected points gained over ${horizonLabel(hz)}, before and after hits</div>
-      <div class="phd"><span></span><span>Gain</span><span>Hit</span><span>Net</span></div>${tbl}
-      <div class="moves">${mv}</div></div>${wild}
-    <div class="sqsum"><div><b>${f1(L.xiPts)}</b><span>XI points with the captain doubled</span></div><div><b>${esc(short(L.cap.name))}</b><span>captain in ${L.capN} of ${hz} weeks</span></div><div><b>${sel.k}</b><span>transfers, ${ft} free</span></div></div>
-    <p class="sqnote">${MEDNOTE} New players show a NEW tag: tap one and Swap him out to re-plan. Keep a player to stop him being sold.</p>${L.html}`;
-}
-function planNow(){
-  const hz = +$('#sq-hz').value || state.data.horizon.length, T = curTeam();
-  if(!T || T.error) return;
-  $('#sqout').innerHTML = '<div class="empty">Working out the best transfers...</div>';
-  setTimeout(() => {
-    state.plan = planTransfers(state.data, hz, T, state.banned); state.sel = null; renderSquad();
-    if(state.plan && !state.plan.error){
-      setTimeout(() => {                        // second step so the plan shows straight away
-        const w = solveSquad(state.data, hz, state.plan.B, new Set(), state.banned, 8, new Map());
-        if(w && state.plan){ state.plan.wild = w; renderSquad(); }
-      }, 30);
+  const R = transferOptions(d, hz, T, sq), hit = state.ft>0 ? 0 : HIT;
+  const sg2 = x => (x>=0?'+':'\u2212')+Math.abs(x).toFixed(1);
+  const before = weekly(sq, hz);
+  const rows = R.opts.map((o,i) => {
+    const open = state.opt===i;
+    let det = '';
+    if(open){
+      const after = weekly(sq.map(p=>p.code===o.out.code?o.inn:p), hz);
+      det = `<div class="od"><div class="ow">${after.map((v,g)=>`<span><small>GW ${d.horizon[g]}</small><b class="${v-before[g]>0.005?'up':''}">${sg2(v-before[g])}</b></span>`).join('')}</div>
+        <p>${esc(o.inn.name)} projects ${f1(sum(o.inn.ep,hz))} points over ${horizonLabel(hz)} against ${f1(sum(o.out.ep,hz))} for ${esc(o.out.name)}. The gain counts only what changes in your best XI each week (captain doubled), so a player who would sit on the bench adds nothing. Sells for £${o.sell.toFixed(1)}m, leaving £${o.left.toFixed(1)}m in the bank.${o.inn.status!=='a'&&o.inn.status!=='n'?' He is flagged with injury news.':''}</p></div>`;
     }
-  }, 20);
+    return `<div class="to pos-${o.inn.pos}${open?' open':''}"><button type="button" class="tr" data-opt="${i}" aria-expanded="${open}">
+      <span class="tl"><span class="in"><em>IN</em>${medical(o.inn)}<b>${esc(o.inn.name)}</b> <small>${o.inn.team} ${o.inn.pos} £${o.inn.price.toFixed(1)}m${o.inn.own!=null?' · '+o.inn.own.toFixed(1)+'%':''}</small></span>
+      <span class="ot"><em>OUT</em><b>${esc(o.out.name)}</b> <small>${o.out.team} £${o.sell.toFixed(1)}m</small></span></span>
+      <span class="tg"><b>${sg2(o.gain)}</b>${hit?`<small>${sg2(o.gain-hit)} after hit</small>`:'<small>points</small>'}</span></button>${det}</div>`;
+  }).join('');
+  const lst = R.opts.length
+    ? `<div class="tohd"><b>Best ${R.opts.length} single transfers</b><span>Ranked by projected points gained over ${horizonLabel(hz)}, using your best XI each week with the captain doubled. ${state.ft>0?`You have ${state.ft} free transfer${state.ft>1?'s':''}.`:`With no free transfer, each costs ${HIT} points: the second figure is after that.`} Tap one to see it week by week.</span></div>${rows}`
+    : '<div class="empty">No single transfer improves this squad within your budget and the three-per-club rule.</div>';
+  out.innerHTML = head + `<div class="sqsum"><div><b>${f1(L.xiPts)}</b><span>XI points with the captain doubled</span></div><div><b>${esc(short(L.cap.name))}</b><span>captain in ${L.capN} of ${hz} weeks</span></div><div><b>£${T.bank.toFixed(1)}m</b><span>in the bank</span></div></div>
+    <p class="sqnote">${MEDNOTE}</p>${L.html}${lst}`;
 }
 function buildSquad(){
-  if(curTeam()){ planNow(); return; }
   const hz = +$('#sq-hz').value || state.data.horizon.length;
   $('#sqout').innerHTML = '<div class="empty">Building...</div>';
   setTimeout(() => {
@@ -763,7 +753,7 @@ function setView(v){
   $('#pctl').hidden = sqv; $('#list').hidden = sqv; $('#squadview').hidden = !sqv; document.querySelector('.dock').hidden = sqv;
   if(sqv) renderSquad(); else render();
 }
-window.FPL = {solveSquad, planTransfers, lineupScore, state};
+window.FPL = {solveSquad, transferOptions, lineupScore, pickGW, state};
 
 /* ---------- events ---------- */
 const sheet = $('#sheet');
@@ -779,7 +769,7 @@ document.addEventListener('click', ev => {
   else if(b.dataset.srow){ const c=+b.dataset.srow; state.srow = state.srow===c?null:c; renderSquad(); }
   else if(b.dataset.lock){ const c=+b.dataset.lock; state.locked.has(c)?state.locked.delete(c):state.locked.add(c); renderSquad(); }
   else if(b.dataset.ban){ const c=+b.dataset.ban; state.banned.add(c); state.locked.delete(c); buildSquad(); }
-  else if(b.dataset.sel){ state.sel=+b.dataset.sel; renderSquad(); }
+  else if(b.dataset.opt){ const i=+b.dataset.opt; state.opt = state.opt===i?null:i; renderSquad(); }
   else if(b.id==='ft-dn'){ state.ft=Math.max(0,state.ft-1); renderSquad(); }
   else if(b.id==='ft-up'){ state.ft=Math.min(5,state.ft+1); renderSquad(); }
   else if(b.id==='b-dn'){ state.budget=Math.max(80,+(state.budget-0.5).toFixed(1)); state.squad=null; renderSquad(); }
@@ -800,8 +790,8 @@ document.addEventListener('input', ev => {
   if(t.id==='q'){ state.q=t.value.trim().toLowerCase(); render(); }
   else if(t.id==='team'){ state.team=t.value; render(); }
   else if(t.id==='hz'){ state.hz=+t.value; render(); }
-  else if(t.id==='sq-team'){ state.mine=+t.value; const T=curTeam(); if(T&&T.ft!=null) state.ft=T.ft; state.squad=null; state.plan=null; state.sel=null; renderSquad(); }
-  else if(t.id==='sq-hz'){ state.squad=null; state.plan=null; state.sel=null; renderSquad(); }
+  else if(t.id==='sq-team'){ state.mine=+t.value; const T=curTeam(); if(T&&T.ft!=null) state.ft=T.ft; state.squad=null; state.opt=null; renderSquad(); }
+  else if(t.id==='sq-hz'){ state.squad=null; state.opt=null; renderSquad(); }
   else if(t.id==='avail'){ state.avail=t.checked; render(); }
   else if(t.id==='pmin'||t.id==='pmax'){ syncPrice(); render(); }
 });
