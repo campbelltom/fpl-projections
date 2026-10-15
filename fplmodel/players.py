@@ -59,7 +59,8 @@ def build_opportunities(seasons: dict[str, Season], tm: pd.DataFrame) -> pd.Data
             o = pd.concat([o, miss], ignore_index=True)
 
         if not s.pgw.empty:
-            g = s.pgw[["player_code", "gw", "defensive_contribution"] + [c for c in EVENT_COLS if c in s.pgw]].copy()
+            g = s.pgw[["player_code", "gw", "defensive_contribution"] + [c for c in EVENT_COLS if c in s.pgw]
+                      + (["starts"] if "starts" in s.pgw else [])].copy()
             g = g.rename(columns={"defensive_contribution": "dc_fpl"})
             o = o.merge(g.drop_duplicates(["player_code", "gw"], keep="last"), on=["player_code", "gw"], how="left")
             # A gameweek row's status/news/chance are recorded AFTER that gameweek (half of the players
@@ -75,6 +76,15 @@ def build_opportunities(seasons: dict[str, Season], tm: pd.DataFrame) -> pd.Data
                 if c in o:
                     o[c] = o[c].fillna(0.0) * np.nan_to_num(frac)
             o["has_pgw"] = True
+            # who started: FPL's own `starts` count per gameweek, handed to the matches of a double gameweek
+            # in order of minutes played (the starter plays longest)
+            if "starts" in o:
+                rk = o.groupby(["player_code", "gw"])["minutes"].rank(method="first", ascending=False)
+                known = o["starts"].notna()
+                o["started"] = np.where(known, ((rk <= o["starts"].fillna(0)) & (o["minutes"] > 0)).astype(float),
+                                        (o["minutes"] >= 60).astype(float))
+                o["start_known"] = known
+                o = o.drop(columns=["starts"])
             # FPL's own defensive-contribution count is what awards the points: prefer it whenever the
             # player had a single match that gameweek (a double gameweek count cannot be split)
             nm = (o["minutes"] > 0).groupby([o["player_code"], o["gw"]]).transform("sum")
@@ -83,8 +93,11 @@ def build_opportunities(seasons: dict[str, Season], tm: pd.DataFrame) -> pd.Data
             o = o.drop(columns=["dc_fpl"])
         else:
             o["status"], o["chance"], o["news"], o["has_pgw"] = np.nan, np.nan, np.nan, False
+            o["started"], o["start_known"] = (o["minutes"] >= 60).astype(float), False
             for c in EVENT_COLS:
                 o[c] = np.nan
+        if "started" not in o:
+            o["started"], o["start_known"] = (o["minutes"] >= 60).astype(float), False
         # open-play versions: penalties are modelled separately (penalties.py)
         o["xg_open"] = (o["xg"] - PEN_XG * o["pen_taken"]).clip(lower=0.0)
         o["goals_open"] = (o["goals"] - o["pen_sc"]).clip(lower=0.0)
@@ -208,6 +221,22 @@ def player_profiles(opp: pd.DataFrame, asof: pd.Timestamp, params: Params, team_
     prof["pS"] = (mg["pS"] + kmin * ppS) / (mg["w"] + kmin)
     prof["m60"] = ((mg["m60"] + 3 * mg["position"].map(pos_m60).fillna(88)) / (mg["p60"] + 3)).clip(60, 95)
     prof["mS"] = ((mg["mS"] + 3 * mg["position"].map(pos_mS).fillna(22)) / (mg["pS"] + 3)).clip(5, 55)
+    # minutes given a start / given a substitute appearance (what he plays when he starts, and when he comes on)
+    stt = a["started"].to_numpy(float) * (mm > 0)
+    sub = (1.0 - a["started"].to_numpy(float)) * (mm > 0)
+    s60 = (mm >= 60) * stt; shk = (mm < 60) * stt
+    h = pd.DataFrame({"player_code": a["player_code"].to_numpy(), "pos": a["position"].to_numpy(),
+                      "ws": wm * stt, "w60": wm * s60, "whk": wm * shk, "wsb": wm * sub,
+                      "m60": mm * wm * s60, "mhk": mm * wm * shk, "msb": mm * wm * sub})
+    hp = h.groupby("pos").sum(numeric_only=True)
+    pos_q = hp["w60"] / hp["ws"]
+    pm60 = hp["m60"] / hp["w60"]; pmhk = hp["mhk"] / hp["whk"]; pmsb = hp["msb"] / hp["wsb"]
+    hg = h.groupby("player_code").sum(numeric_only=True)
+    mh = prof[["position"]].join(hg, how="left").fillna(0.0)
+    prof["q60s"] = (mh["w60"] + 3 * mh["position"].map(pos_q).fillna(0.85)) / (mh["ws"] + 3)
+    prof["m60"] = ((mh["m60"] + 3 * mh["position"].map(pm60).fillna(88)) / (mh["w60"] + 3)).clip(60, 95)
+    prof["m_hook"] = ((mh["mhk"] + 2 * mh["position"].map(pmhk).fillna(55)) / (mh["whk"] + 2)).clip(10, 59)
+    prof["m_sub"] = ((mh["msb"] + 3 * mh["position"].map(pmsb).fillna(20)) / (mh["wsb"] + 3)).clip(3, 45)
     prof["n_eff_minutes"] = mg["w"]
     # appearance of the player in the minutes model at all (history length)
     prof["has_history"] = prof["n_eff_minutes"] > 0

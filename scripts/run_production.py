@@ -151,6 +151,10 @@ def main() -> None:
             "ep": [round(float(x), 2) if pd.notna(x) else 0.0 for x in grp["ep"]],
             "p_play": [round(float(x), 2) if pd.notna(x) else 0.0 for x in grp["p_play"]],
             "p60": [round(float(min(1.0, x)), 2) if pd.notna(x) else 0.0 for x in grp["p60_eff"]],
+            "pst": [round(float(min(1.0, x)), 3) if pd.notna(x) else 0.0 for x in grp["p_start_eff"]],
+            "psub": [round(float(min(1.0, x)), 3) if pd.notna(x) else 0.0 for x in grp["p_sub_eff"]],
+            "ms": [round(float(x), 0) if pd.notna(x) else 0.0 for x in grp["m_from_start"]],
+            "mb": [round(float(x), 0) if pd.notna(x) else 0.0 for x in grp["m_from_sub"]],
             "mins": [round(float(x), 0) if pd.notna(x) else 0.0 for x in grp["m_exp"]],
             "fx": [", ".join(fx.get((pc, gw), [])) or "BLANK" for gw in gws],
             "comp": {k[4:]: round(float(grp["pts_" + k[4:]].iloc[0]), 2) for k in

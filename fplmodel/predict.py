@@ -99,8 +99,22 @@ def expected_points(ctx: pd.DataFrame, prof: pd.DataFrame, avail: pd.DataFrame, 
     if norm is not None:
         tmp = normalise_team(pd.DataFrame({"match_id": d["match_id"], "team": d["team"], "p60": p60, "pS": pS}), *norm)
         p60, pS = tmp["p60"], tmp["pS"]
-    m60, mS = d["m60"].to_numpy(), d["mS"].to_numpy()
-    m_exp = p60 * m60 + pS * mS
+    m60 = d["m60"].to_numpy()
+    if "p_start" in d:
+        # a starter reaches 60 with probability q; the rest of the appearances are early hooks and substitutes
+        q = d["q60s"].clip(0.05, 1.0).to_numpy()
+        pst = np.clip(np.asarray(p60) / q, 0, 1)
+        phook = pst * (1 - q)
+        psub = np.clip(np.asarray(pS) - phook, 0, 1)
+        m_exp = p60 * m60 + phook * d["m_hook"].to_numpy() + psub * d["m_sub"].to_numpy()
+        mS = np.where(np.asarray(pS) > 1e-6, (m_exp - p60 * m60) / np.maximum(np.asarray(pS), 1e-6), d["m_sub"].to_numpy())
+        d["mS"] = mS
+        d["p_start_eff"], d["p_sub_eff"] = pst, psub
+        d["m_from_start"] = p60 * m60 + phook * d["m_hook"].to_numpy()      # expected minutes that come from starting
+        d["m_from_sub"] = psub * d["m_sub"].to_numpy()                      # ... and from coming off the bench
+    else:
+        mS = d["mS"].to_numpy()
+        m_exp = p60 * m60 + pS * mS
     d["p_play"] = p60 + pS
     # penalties: designated takers weighted by how much of the match they are expected to be on the pitch
     if "pen_w" in d:
@@ -192,7 +206,7 @@ def _components(d: pd.DataFrame, pt, rules: Rules, params: Params, bonus: BonusM
 
 def aggregate_gameweek(d: pd.DataFrame) -> pd.DataFrame:
     """Sum fixtures within a gameweek (double gameweeks add up; blank gameweeks have no row)."""
-    cols = [c for c in d.columns if c.startswith("pts_")] + ["ep", "ep_cond60", "p_play", "p60_eff", "m_exp", "lam_g", "lam_a", "p_cs", "p_dc", "e_saves", "e_gc"]
+    cols = [c for c in d.columns if c.startswith("pts_")] + ["ep", "ep_cond60", "p_play", "p60_eff", "p_start_eff", "p_sub_eff", "m_from_start", "m_from_sub", "m_exp", "lam_g", "lam_a", "p_cs", "p_dc", "e_saves", "e_gc"]
     g = d.groupby(["player_code", "gw"], as_index=False).agg({**{c: "sum" for c in cols}, "ep_sd": lambda x: float(np.sqrt((x ** 2).sum())),
                                                              "match_id": "count"})
     return g.rename(columns={"match_id": "n_fixtures"})

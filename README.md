@@ -23,3 +23,14 @@ Expected FPL points per player for the next 8 gameweeks, rebuilt from scratch.
 - `fplmodel/bonus.py`: bonus points come from a per-match simulation of BPS (weights fitted by `scripts/fit_bps.py`
   into `config/bps_model.json`). Backtest: calibrated overall and slightly better MAE than the old regression, similar RMSE
   (bonus is noisy). The old regression remains as a fallback if `bps_model.json` is missing.
+
+## Minutes
+
+Each match a player is in one of three states: starts, comes off the bench, or is unused. A walk-forward
+multinomial model (`fplmodel/minutes.py`) gives the three probabilities from his recent starts, appearances and
+tenure. Starts come from FPL's own `starts` count per gameweek (2025/26 on; earlier rows fall back to "played
+60+"). Minutes are then conditional: a starter reaches 60 with probability `q60s` and plays `m60` minutes, an early
+hook plays `m_hook`, a substitute plays `m_sub` (all decayed per-player averages shrunk to the position).
+Expected minutes = P(start)·minutes-if-start + P(sub)·minutes-if-sub, which also feeds the 60+ and short-appearance
+points. Team totals are blended halfway towards a normal match (`NORM_STRENGTH = 0.5`), which backtests best on
+minutes (MAE 12.5 → 12.3, bias -0.2 → +0.1) with points error unchanged. The Lineups tab shows all of it.

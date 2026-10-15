@@ -102,7 +102,12 @@ class Context:
         X = features_from_state(stt, prof["position"], early, mm.prior60)
         pr = mm.predict(X)
         prof["p60_hist"], prof["pS_hist"] = prof["p60"], prof["pS"]
-        prof["p60"], prof["pS"] = pr["p60"], pr["pS"]
+        # start / substitute / unused, then minutes given each: a starter reaches 60 with prob q60s
+        q = prof["q60s"].clip(0.05, 1.0)
+        prof["p_start"], prof["p_sub"] = pr["p_start"], pr["p_sub"]
+        prof["p60"] = pr["p_start"] * q
+        prof["pS"] = pr["p_start"] * (1 - q) + pr["p_sub"]
+        prof["mS"] = ((pr["p_start"] * (1 - q) * prof["m_hook"] + pr["p_sub"] * prof["m_sub"]) / prof["pS"].clip(lower=1e-6)).clip(3, 59)
         if overrides:
             for pc, o in overrides.items():
                 pc = int(pc)
