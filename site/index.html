@@ -63,30 +63,31 @@ button{cursor:pointer}
 .sort button[aria-pressed=true]{background:var(--ink);color:var(--bg)}
 
 /* list */
-#list{display:flex;flex-direction:column;gap:6px;padding-bottom:96px}
+#list{display:flex;flex-direction:column;gap:4px;padding-bottom:96px}
 @media (min-width:820px){#list{display:grid;grid-template-columns:1fr 1fr;gap:8px}.item.open{grid-column:1/-1}}
 .item{background:var(--card);border-radius:14px;overflow:hidden;position:relative}
 .item::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--p)}
-.row{all:unset;box-sizing:border-box;cursor:pointer;display:grid;grid-template-columns:minmax(0,1fr) 82px minmax(50px,auto);gap:8px;align-items:center;width:100%;padding:8px 10px 8px 14px;min-height:54px}
+.row{all:unset;box-sizing:border-box;cursor:pointer;display:grid;grid-template-columns:minmax(0,1fr) 62px minmax(42px,auto);gap:6px;align-items:center;width:100%;padding:4px 8px 4px 12px;min-height:40px}
 .row:focus-visible{outline:3px solid var(--focus);outline-offset:-3px;border-radius:14px}
 .row>span:first-child{min-width:0}
-.l1{display:flex;align-items:baseline;gap:6px;min-width:0}
-.nm{font:600 1.08rem/1.15 var(--num);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.l1{display:flex;align-items:center;gap:5px;min-width:0}
+.mt{margin-left:auto;flex:none;font:500 .72rem var(--num);color:var(--ink2);white-space:nowrap}.mt b{color:var(--ink);font-weight:600}
+.nm{font:600 .95rem/1.15 var(--num);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .l2{display:flex;align-items:center;gap:6px;font:500 .8rem/1.2 var(--num);color:var(--ink2);margin-top:3px;white-space:nowrap;overflow:hidden}
-.chip{font:700 .68rem/1 var(--num);padding:3px 5px;border-radius:5px;background:var(--p);color:var(--on-pos);letter-spacing:.02em}
+.chip{font:700 .6rem/1 var(--num);padding:3px 4px;flex:none;border-radius:5px;background:var(--p);color:var(--on-pos);letter-spacing:.02em}
 .l2 b{color:var(--ink);font-weight:600}
 .l2 .dot{opacity:.45}
 .flag{font:600 .68rem/1 var(--body);padding:2px 5px;border-radius:5px;border:1px solid currentColor;flex:none}
 .flag.d{color:var(--warn)} .flag.o{color:var(--bad)} .flag.n{color:var(--ink2)}
 .sc{min-width:0}
-.nx{display:block;font:600 .68rem/1 var(--num);color:var(--ink2);margin-top:3px;text-align:center;white-space:nowrap}
-.strip{display:flex;align-items:flex-end;gap:2px;height:30px}
+.nx{display:block;font:600 .6rem/1 var(--num);color:var(--ink2);margin-top:2px;text-align:center;white-space:nowrap}
+.strip{display:flex;align-items:flex-end;gap:2px;height:20px}
 .strip i{flex:1;background:var(--p);border-radius:2px 2px 0 0;min-height:2px;transform-origin:bottom}
 .strip i.off{background:none;border:1px dashed var(--ink2);border-bottom:0;height:7px}
 .strip i.out{opacity:.3}
 .tot{text-align:right;line-height:1}
-.tot .a{font:700 1.45rem/1 var(--num);font-variant-numeric:tabular-nums;letter-spacing:-.01em}
-.tot .b{font:500 .72rem/1 var(--num);color:var(--ink2);margin-top:4px;font-variant-numeric:tabular-nums}
+.tot .a{font:700 1.2rem/1 var(--num);font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+.tot .b{font:500 .62rem/1 var(--num);color:var(--ink2);margin-top:3px;font-variant-numeric:tabular-nums}
 
 /* detail (animated open) */
 .dwrap{display:grid;grid-template-rows:0fr}
@@ -192,6 +193,7 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
 .gwt th,.gwt td{padding:0;text-align:center;font-weight:600}
 .gwt thead th{font:600 .68rem var(--num);color:var(--ink2);padding:6px 0 4px}
 .gwt .nm{position:sticky;left:0;z-index:1;background:var(--card);text-align:left;width:92px;min-width:92px;max-width:92px;padding:0}
+.gwt .nm .rb{display:block;width:100%;padding:3px 3px 3px 9px;position:relative;border-left:4px solid var(--p);box-sizing:border-box;overflow:hidden}
 .gwt .nm button{all:unset;box-sizing:border-box;cursor:pointer;display:block;width:100%;padding:3px 3px 3px 9px;position:relative;border-left:4px solid var(--p);overflow:hidden}
 .gwt .nm button:focus-visible{outline:3px solid var(--focus);outline-offset:-3px}
 .gwt .n1{display:block;font:600 .8rem/1.15 var(--num);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -235,6 +237,16 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
 .wi span{font-size:.78rem;color:var(--ink2)}
 .wi .wn{display:flex;gap:14px}.wi .wn b{font:700 1.05rem var(--num)}
 .wi button{justify-self:start;height:32px;padding:0 12px;border:0;border-radius:9px;background:var(--card2);font:600 .78rem var(--num);color:var(--ink)}
+.wc{background:var(--card);border-radius:14px;padding:10px 12px;margin:10px 0}
+.wc .wh b{display:block;font:700 1rem var(--num)}.wc .wh span{display:block;font-size:.78rem;color:var(--ink2);margin:2px 0 8px}
+.wc .sqsum{background:var(--card2)}.wc .gwt{background:none}
+.wt{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums;margin:6px 0}
+.wt th,.wt td{padding:4px 2px;text-align:center;font:600 .82rem var(--num);border-top:1px solid var(--line)}
+.wt thead th{font:600 .68rem var(--num);color:var(--ink2);border-top:0}
+.wt small{display:block;font:600 .62rem var(--num)}.wt .up{color:var(--good,#2a9d5c)}.wt .dn{color:var(--bad)}
+.wt tr.bestw{background:color-mix(in srgb,var(--warn) 22%,transparent)}
+.wt u{text-decoration:none;font:700 .5rem var(--num);background:var(--warn);color:#000;border-radius:3px;padding:1px 3px;margin-left:3px}
+.wc details summary{cursor:pointer;font:600 .85rem var(--num);padding:6px 0}
 .tohd{margin:12px 2px 6px}.tohd b{display:block;font:700 1rem var(--num)}.tohd span{font-size:.78rem;color:var(--ink2)}
 .to{background:var(--card);border-radius:14px;margin-bottom:5px;overflow:hidden;border-left:4px solid var(--p)}
 .to .tr{all:unset;box-sizing:border-box;cursor:pointer;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center;width:100%;padding:8px 10px}
@@ -335,7 +347,7 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
 'use strict';
 const $ = s => document.querySelector(s);
 const POS = ['All','GKP','DEF','MID','FWD'];
-const state = {pos:'All', team:'', q:'', hz:8, avail:true, sort:'total', open:null, pmin:0, pmax:99, lo:0, hi:99, data:null, intro:true, vbase:'starter', view:'players', mine:-1, ft:1, plan:null, sel:null, budget:100, locked:new Set(), banned:new Set(), squad:null, srow:null, opt:null, moves:[], optList:[]};
+const state = {pos:'All', team:'', q:'', hz:8, avail:true, sort:'total', open:null, pmin:0, pmax:99, lo:0, hi:99, data:null, intro:true, vbase:'starter', view:'players', mine:-1, ft:1, plan:null, sel:null, budget:100, locked:new Set(), banned:new Set(), squad:null, srow:null, opt:null, wc:null, moves:[], optList:[]};
 const store = {
   get(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } },
   set(k,v){ try{ localStorage.setItem(k,v); }catch(e){} },
@@ -484,8 +496,7 @@ function render(){
     const open = state.open===p.code;
     const nx = p.fx[0].split(', ')[0];
     return `<div class="item pos-${p.pos}${open?' open':''}"><button class="row" data-c="${p.code}" aria-expanded="${open}">
-      <span><span class="l1"><span class="nm">${esc(p.name)}</span>${flag(p)}</span>
-      <span class="l2"><span class="chip">${p.pos}</span><b>${p.team}</b>${p.price!=null?`<span class="dot">·</span><b>£${p.price.toFixed(1)}</b>`:''}${p.own!=null?`<span class="dot">·</span>${p.own.toFixed(1)}%`:''}</span></span>
+      <span class="l1"><span class="chip">${p.pos}</span><span class="nm">${esc(p.name)}</span>${flag(p)}<span class="mt">${p.team}${p.price!=null?` <b>£${p.price.toFixed(1)}</b>`:''}${p.own!=null?` ${p.own.toFixed(1)}%`:''}</span></span>
       <span class="sc"><span class="strip" aria-hidden="true">${bars}</span><span class="nx">${esc(nx)}</span></span>
       <span class="tot">${state.sort==='value'
         ? `<div class="a">${p.price==null?'-':sg(p._v)}</div><div class="b">${sg(p._pa)} pts</div>`
@@ -633,7 +644,7 @@ function medical(p){
   return `<span class="med ${p.status==='d'?'d':''}" title="${t}${p.news?': '+esc(p.news):''}" role="img" aria-label="${t}">${CROSS}</span>`;
 }
 const short = n => { const w = n.split(' '); const l = w[w.length-1]; return l.length>7 ? l.slice(0,6)+'.' : l; };
-function lineupHTML(sq, hz, ownedSet){
+function lineupHTML(sq, hz, ownedSet, ro){
   const d = state.data, G = []; for(let g=0; g<hz; g++) G.push(pickGW(sq, g));
   const order = {GKP:0,DEF:1,MID:2,FWD:3};
   const rows = sq.slice().sort((a,b) => order[a.pos]-order[b.pos] || sum(b.ep,hz)-sum(a.ep,hz));
@@ -654,12 +665,12 @@ function lineupHTML(sq, hz, ownedSet){
       if(p.fx[g]==='BLANK') return `<td class="c off" title="GW ${d.horizon[g]}: no fixture"><b>-</b></td>`;
       return `<td class="c ${st?'s':'b'}${cp?' cap':''}${cp&&g===tc.g?' tcc':''}" title="GW ${d.horizon[g]} ${esc(p.fx[g])}: ${f1(e)} points, ${cp?'captain':st?'in the XI':'on the bench'}"><b>${f1(e)}</b><i>${esc(p.fx[g])}</i></td>`;
     }).join('');
-    const isNew = ownedSet && !ownedSet.has(p.code), lk = state.locked.has(p.code), open = state.srow===p.code;
+    const isNew = ownedSet && !ownedSet.has(p.code), lk = state.locked.has(p.code), open = !ro && state.srow===p.code;
     const why = starts===hz ? `Starts every week.` : starts===0 ? `Never makes the XI over this period.` :
       `Starts ${starts} of ${hz}. Benched when the player he is up against scores more: ` + off.slice(0,4).map(o=>`GW ${d.horizon[o.g]} (${f1(o.e)} vs ${f1(o.cut)})`).join(', ') + (off.length>4?', ...':'') + '.';
     const act = open ? `<tr class="act pos-${p.pos}"><td colspan="${hz+2}"><div class="why">${why} Price £${p.price.toFixed(1)}m${p.own!=null?`, owned by ${p.own.toFixed(1)}%`:''}.</div>
       <div class="tb"><button type="button" data-lock="${p.code}" aria-pressed="${lk}">${lk?'Kept':'Keep in squad'}</button>${ownedSet ? (isNew?`<button type="button" data-undo="${p.code}">Undo this transfer</button>`:'') : `<button type="button" data-ban="${p.code}">Swap out</button>`}</div></td></tr>` : '';
-    return `<tr class="pr pos-${p.pos}"><th class="nm" scope="row"><button type="button" data-srow="${p.code}" aria-expanded="${open}">${medical(p)}<span class="n1">${esc(short(p.name))}${isNew?'<em>NEW</em>':''}${lk?'<em>KEPT</em>':''}</span><span class="n2">${p.pos} ${p.team} £${p.price.toFixed(1)}</span></button></th>${cells}<td class="tt"><b>${f1(pts)}</b></td></tr>${act}`;
+    return `<tr class="pr pos-${p.pos}"><th class="nm" scope="row">${ro?'<span class="rb">':`<button type="button" data-srow="${p.code}" aria-expanded="${open}">`}${medical(p)}<span class="n1">${esc(short(p.name))}${isNew?'<em>NEW</em>':''}${lk?'<em>KEPT</em>':''}</span><span class="n2">${p.pos} ${p.team} £${p.price.toFixed(1)}</span>${ro?'</span>':'</button>'}</th>${cells}<td class="tt"><b>${f1(pts)}</b></td></tr>${act}`;
   }).join('');
   const foot = `<tr class="ft"><th class="nm">XI total</th>${G.map(x=>`<td><b>${f1(x.pts)}</b></td>`).join('')}<td class="tt"><b>${f1(xiPts)}</b></td></tr>
     <tr class="ft2"><th class="nm">Captain</th>${G.map(x=>`<td title="${esc(x.cap.name)}">${esc(short(x.cap.name).slice(0,5))}</td>`).join('')}<td></td></tr>
@@ -754,7 +765,58 @@ function renderTeam(hz, T){
     <div class="wn"><span><b>${sg2(L.xiPts-base0)}</b> points</span><span><b>${hitSoFar?'\u2212'+hitSoFar:'0'}</b> hit</span><span><b>${sg2(L.xiPts-base0-hitSoFar)}</b> net</span></div>
     <button type="button" id="wi-reset">Back to my team</button></div>` : '';
   out.innerHTML = head + wi + `<div class="sqsum"><div><b>${f1(L.xiPts)}</b><span>XI points with the captain doubled</span></div><div><b>${esc(short(L.cap.name))}</b><span>captain in ${L.capN} of ${hz} weeks</span></div><div><b>£${W.bank.toFixed(1)}m</b><span>in the bank</span></div></div>
-    <p class="sqnote">${MEDNOTE}</p>${L.html}${lst}`;
+    <p class="sqnote">${MEDNOTE}</p>${L.html}<div id="wcbox">${wcHTML()}</div>${lst}`;
+}
+/* ---------- wildcard and free hit simulation ---------- */
+function wcCtx(){
+  const T = curTeam(); if(!T || T.error) return null;
+  const hz = +$('#sq-hz').value || state.data.horizon.length, W = workTeam(T);
+  const by = new Map(state.data.players.map(p=>[p.code,p])), sq = W.squad.map(x=>by.get(x.code));
+  const owned = new Map(W.squad.map(x=>[x.code,x.sell]));
+  const B = Math.round((W.bank + W.squad.reduce((t,x)=>t+x.sell,0))*10)/10;
+  const key = [hz, B, W.squad.map(x=>x.code).sort().join(','), [...state.banned].sort().join(',')].join('|');
+  return {T, hz, W, sq, owned, B, key};
+}
+function runWild(){
+  const c = wcCtx(); if(!c) return; const d = state.data;
+  const st = state.wc = {key:c.key, busy:true, done:0, fh:[], wild:null};
+  const upd = () => { const b = $('#wcbox'); if(b) b.innerHTML = wcHTML(); };
+  upd();
+  setTimeout(() => {
+    st.wild = solveSquad(d, c.hz, c.B, new Set(), state.banned, 8, c.owned); st.done++; upd();
+    let g = 0;
+    const next = () => {
+      if(state.wc!==st) return;
+      if(g>=c.hz){ st.busy = false; upd(); return; }
+      const dg = {squad:d.squad, players:d.players.map(p => Object.assign({}, p, {ep:[p.ep[g]]}))};
+      const r = solveSquad(dg, 1, c.B, new Set(), state.banned, 6, c.owned);
+      const sqg = r ? r.squad.map(x => d.players.find(p=>p.code===x.code)) : null;
+      st.fh.push(sqg ? {g, squad:sqg, pts:pickGW(sqg,g).pts} : {g, squad:null, pts:0});
+      g++; st.done++; upd(); setTimeout(next, 10);
+    };
+    setTimeout(next, 10);
+  }, 20);
+}
+function wcHTML(){
+  const c = wcCtx(); if(!c) return '';
+  const st = state.wc;
+  if(!st || st.key!==c.key) return `<div class="wc"><div class="wh"><b>Wildcard and free hit</b><span>Simulates a wildcard (best 15 for the whole period) and a free hit for each week, using £${c.B.toFixed(1)}m, the value of your squad plus bank, and compares both with your team.</span></div><button type="button" class="do" id="wc-run">Simulate</button></div>`;
+  const d = state.data, hz = c.hz, mine = weekly(c.sq, hz), tot = a => a.reduce((x,y)=>x+y,0);
+  if(!st.wild) return `<div class="wc"><div class="wh"><b>Wildcard and free hit</b><span>Working out the best squad...</span></div></div>`;
+  const wcw = weekly(st.wild.squad, hz), wcTot = tot(wcw), myTot = tot(mine);
+  const fh = st.fh.map(f => ({g:f.g, pts:f.pts, gain:f.pts-mine[f.g], squad:f.squad}));
+  const bestFH = fh.length ? fh.reduce((a,b)=>b.gain>a.gain?b:a) : null;
+  const sg2 = x => (x>=0?'+':'\u2212')+Math.abs(x).toFixed(1);
+  const rows = Array.from({length:hz}, (_,g) => { const f = fh[g]; const best = bestFH && f && f.g===bestFH.g && !st.busy;
+    return `<tr${best?' class="bestw"':''}><th>${d.horizon[g]}${best?'<u>FH</u>':''}</th><td>${f1(mine[g])}</td><td>${f1(wcw[g])}<small class="${wcw[g]-mine[g]>=0?'up':'dn'}">${sg2(wcw[g]-mine[g])}</small></td><td>${f?f1(f.pts):'...'}${f?`<small class="${f.gain>=0?'up':'dn'}">${sg2(f.gain)}</small>`:''}</td></tr>`; }).join('');
+  const out = st.wild.squad.filter(p=>!c.sq.some(q=>q.code===p.code)).map(p=>esc(p.name)), gone = c.sq.filter(p=>!st.wild.squad.some(q=>q.code===p.code)).map(p=>esc(p.name));
+  const L = lineupHTML(st.wild.squad, hz, new Set(c.sq.map(p=>p.code)), true);
+  return `<div class="wc"><div class="wh"><b>Wildcard and free hit</b><span>Budget £${c.B.toFixed(1)}m. The wildcard is the best squad for the whole period; a free hit is the best squad for one week only, then your team returns.${st.busy?` Working: ${st.done} of ${hz+1} done.`:''}</span></div>
+    <div class="sqsum"><div><b>${f1(myTot)}</b><span>your team over ${horizonLabel(hz)}</span></div><div><b>${f1(wcTot)}</b><span>wildcard squad, ${sg2(wcTot-myTot)}</span></div><div><b>${bestFH&&!st.busy?'GW '+d.horizon[bestFH.g]:'...'}</b><span>${bestFH&&!st.busy?'best free hit week, '+sg2(bestFH.gain):'working out'}</span></div></div>
+    <table class="wt"><thead><tr><th>GW</th><th>Your XI</th><th>Wildcard</th><th>Free hit</th></tr></thead><tbody>${rows}</tbody></table>
+    <p class="sqnote">Each figure is the best XI that week with the captain doubled. The wildcard column uses one squad for every week; the free hit column rebuilds the whole squad for that week alone, so it is always at least as high. The wildcard brings in ${out.length} new players and removes ${gone.length}. No transfer hits are involved.</p>
+    <details><summary>Wildcard squad</summary>${L.html}</details>
+    <button type="button" class="do" id="wc-run">Run again</button></div>`;
 }
 function buildSquad(){
   const hz = +$('#sq-hz').value || state.data.horizon.length;
@@ -788,6 +850,7 @@ document.addEventListener('click', ev => {
   else if(b.dataset.srow){ const c=+b.dataset.srow; state.srow = state.srow===c?null:c; renderSquad(); }
   else if(b.dataset.lock){ const c=+b.dataset.lock; state.locked.has(c)?state.locked.delete(c):state.locked.add(c); renderSquad(); }
   else if(b.dataset.ban){ const c=+b.dataset.ban; state.banned.add(c); state.locked.delete(c); buildSquad(); }
+  else if(b.id==='wc-run'){ runWild(); }
   else if(b.dataset.do){ const o=state.optList[+b.dataset.do]; if(o){ state.moves.push({o:o.out.code,i:o.inn.code}); state.opt=null; renderSquad(); } }
   else if(b.dataset.undo){ const k=state.moves.findIndex(m=>m.i===+b.dataset.undo); if(k>=0) state.moves=state.moves.slice(0,k); state.opt=null; state.srow=null; renderSquad(); }
   else if(b.id==='wi-reset'){ state.moves=[]; state.opt=null; state.srow=null; renderSquad(); }
