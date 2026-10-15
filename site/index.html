@@ -187,6 +187,38 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
 .mv .o{color:var(--ink2)} .mv .i{font-weight:600;text-align:right} .mv .ar{color:var(--ink2)}
 .mv small{display:block;color:var(--ink2);font:500 .72rem var(--num)}
 .sqnote{font-size:.78rem;color:var(--ink2);margin:0 2px 10px}
+.gwt{overflow-x:auto;background:var(--card);border-radius:14px;margin-bottom:8px}
+.gwt table{border-collapse:separate;border-spacing:0;width:100%;font-variant-numeric:tabular-nums}
+.gwt th,.gwt td{padding:0;text-align:center;font-weight:600}
+.gwt thead th{font:600 .68rem var(--num);color:var(--ink2);padding:6px 0 4px}
+.gwt .nm{position:sticky;left:0;z-index:1;background:var(--card);text-align:left;width:92px;min-width:92px;max-width:92px;padding:0}
+.gwt .nm button{all:unset;box-sizing:border-box;cursor:pointer;display:block;width:100%;padding:3px 3px 3px 9px;position:relative;border-left:4px solid var(--p);overflow:hidden}
+.gwt .nm button:focus-visible{outline:3px solid var(--focus);outline-offset:-3px}
+.gwt .n1{display:block;font:600 .8rem/1.15 var(--num);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.gwt .n1 em{font:700 .55rem var(--num);font-style:normal;color:var(--p);margin-left:3px}
+.gwt .n2{display:block;font:500 .58rem var(--num);color:var(--ink2);white-space:nowrap}
+.gwt .med{width:13px;height:13px;border-radius:0 0 6px 0;left:0}.gwt .med svg{width:8px;height:8px}
+.gwt .c{min-width:29px;width:29px;padding:2px 0;position:relative;border-top:1px solid var(--line)}
+.gwt .c b{display:block;font:600 .76rem/1.05 var(--num)}
+.gwt .c i{display:block;font:500 .5rem/1.1 var(--num);font-style:normal;color:var(--ink2)}
+.gwt .c.s{background:color-mix(in srgb,var(--p) 20%,transparent)}
+.gwt .c.s b{font-weight:700}
+.gwt .c.b{color:var(--ink2);opacity:.6}
+.gwt .c.off{color:var(--ink2);opacity:.5}
+.gwt .c.cap{box-shadow:inset 0 0 0 2px var(--ink)}
+.gwt .tt{min-width:36px;width:36px;font:700 .8rem var(--num);padding-right:6px;text-align:right;border-top:1px solid var(--line)}
+.gwt thead .tt{font:600 .68rem var(--num);border-top:0}
+.gwt .nm{border-top:1px solid var(--line)} .gwt thead .nm{border-top:0;padding:6px 9px 4px;font:600 .68rem var(--num);color:var(--ink2)}
+.gwt tr.pos-GKP+tr.pos-DEF .nm,.gwt tr.pos-GKP+tr.pos-DEF td,.gwt tr.pos-DEF+tr.pos-MID .nm,.gwt tr.pos-DEF+tr.pos-MID td,.gwt tr.pos-MID+tr.pos-FWD .nm,.gwt tr.pos-MID+tr.pos-FWD td{border-top-width:2px}
+.gwt tfoot .ft th,.gwt tfoot .ft td{border-top:2px solid var(--ink);padding:5px 0;font:700 .76rem var(--num)}
+.gwt tfoot .ft th{padding-left:9px}
+.gwt tfoot .ft2 th,.gwt tfoot .ft2 td{font:500 .58rem var(--num);color:var(--ink2);padding:2px 0}
+.gwt tfoot .ft2 th{padding-left:9px}
+.gwt .act td{text-align:left;padding:6px 9px 8px;background:var(--card2);border-top:1px solid var(--line);position:sticky;left:0}
+.gwt .act .why{font:500 .78rem/1.3 var(--body);color:var(--ink);white-space:normal;max-width:calc(100vw - 50px)}
+.gwt .act .tb{display:flex;gap:6px;margin-top:6px}
+.gwt .act .tb button{height:34px;padding:0 12px;border:0;border-radius:9px;background:var(--card);font:600 .78rem var(--num);color:var(--ink)}
+.gwt .act .tb button[aria-pressed=true]{background:var(--ink);color:var(--bg)}
 .pl{display:flex;gap:5px;margin-bottom:5px;justify-content:center}
 .pl h4{display:none}
 .tile{flex:1;max-width:100px;min-width:0;background:var(--card);border-radius:12px;padding:6px 6px 5px;position:relative;border-top:3px solid var(--p);text-align:center}
@@ -273,7 +305,7 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
 'use strict';
 const $ = s => document.querySelector(s);
 const POS = ['All','GKP','DEF','MID','FWD'];
-const state = {pos:'All', team:'', q:'', hz:8, avail:true, sort:'total', open:null, pmin:0, pmax:99, lo:0, hi:99, data:null, intro:true, vbase:'starter', view:'players', mine:-1, ft:1, plan:null, sel:null, budget:100, locked:new Set(), banned:new Set(), squad:null};
+const state = {pos:'All', team:'', q:'', hz:8, avail:true, sort:'total', open:null, pmin:0, pmax:99, lo:0, hi:99, data:null, intro:true, vbase:'starter', view:'players', mine:-1, ft:1, plan:null, sel:null, budget:100, locked:new Set(), banned:new Set(), squad:null, srow:null};
 const store = {
   get(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } },
   set(k,v){ try{ localStorage.setItem(k,v); }catch(e){} },
@@ -550,14 +582,18 @@ function solveSquad(data, hz, budget, locked, banned, restarts, owned){
   }
   return {squad:best.map(o=>o.p), score:bestS, spent:best.reduce((t,o)=>t+o.price,0)/10};
 }
-function pickXI(squad, hz){                   // display lineup: by horizon total
-  const t = p => sum(p.ep,hz), by = {GKP:[],DEF:[],MID:[],FWD:[]};
-  squad.forEach(p => by[p.pos].push(p)); for(const k in by) by[k].sort((a,b)=>t(b)-t(a));
-  const xi = [by.GKP[0]], rest = [], bench = [by.GKP[1]];
+/* Per-gameweek XI: the same rule lineupScore uses (best legal XI by projected points, captain on the top scorer, doubled). */
+function pickGW(squad, g){
+  const by = {GKP:[],DEF:[],MID:[],FWD:[]};
+  squad.forEach(p => by[p.pos].push(p)); for(const k in by) by[k].sort((a,b)=>b.ep[g]-a.ep[g]);
+  const xi = [by.GKP[0]], rest = [];
   for(const k of ['DEF','MID','FWD']) by[k].forEach((p,j) => (j<MINXI[k] ? xi : rest).push(p));
-  rest.sort((a,b)=>t(b)-t(a)); rest.slice(0,4).forEach(p=>xi.push(p)); rest.slice(4).forEach(p=>bench.push(p));
-  const cap = xi.reduce((a,b)=>t(b)>t(a)?b:a);
-  return {xi, bench:bench.filter(Boolean), cap};
+  rest.sort((a,b)=>b.ep[g]-a.ep[g]);
+  const flex = rest.slice(0,4); flex.forEach(p=>xi.push(p));
+  const cap = xi.reduce((a,b)=>b.ep[g]>a.ep[g]?b:a);
+  const cut = flex.length ? flex[flex.length-1].ep[g] : 0;      // last place in the XI among the free choices
+  const shape = ['DEF','MID','FWD'].map(k => xi.filter(p=>p.pos===k).length).join('-');
+  return {xi:new Set(xi.map(p=>p.code)), cap, cut, gk:by.GKP[0].ep[g], shape, pts: xi.reduce((t,p)=>t+p.ep[g],0) + cap.ep[g]};
 }
 const CROSS = '<svg viewBox="0 0 12 12"><path d="M6 1.5v9M1.5 6h9"/></svg>';
 function medical(p){
@@ -565,20 +601,35 @@ function medical(p){
   const t = {d:'Doubtful',i:'Injured',s:'Suspended',u:'Unavailable'}[p.status] || p.status;
   return `<span class="med ${p.status==='d'?'d':''}" title="${t}${p.news?': '+esc(p.news):''}" role="img" aria-label="${t}">${CROSS}</span>`;
 }
-function tile(p, hz, cap, o){
-  o = o || {};
-  const lk = state.locked.has(p.code);
-  return `<div class="tile pos-${p.pos}${cap?' cap':''}">${medical(p)}${o.isNew?'<span class="new">NEW</span>':''}<div class="tn" title="${esc(p.name)}">${esc(p.name)}</div>
-    <div class="tm">${p.team} · £${p.price.toFixed(1)}</div><div class="tp">${f1(sum(p.ep,hz))}</div>
-    <div class="tb"><button type="button" data-lock="${p.code}" aria-pressed="${lk}" aria-label="Keep ${esc(p.name)} in the squad">${lk?'Kept':'Keep'}</button>${o.noSwap?'':`<button type="button" data-ban="${p.code}" aria-label="Replace ${esc(p.name)}">Swap</button>`}</div></div>`;
-}
+const short = n => { const w = n.split(' '); const l = w[w.length-1]; return l.length>7 ? l.slice(0,6)+'.' : l; };
 function lineupHTML(sq, hz, ownedSet){
-  const {xi, bench, cap} = pickXI(sq, hz);
-  const o = p => ownedSet ? {isNew:!ownedSet.has(p.code), noSwap:ownedSet.has(p.code)} : {};
-  const row = pos => `<div class="pl">${xi.filter(p=>p.pos===pos).map(p=>tile(p,hz,p===cap,o(p))).join('')}</div>`;
-  const xiPts = xi.reduce((t,p)=>t+sum(p.ep,hz),0) + sum(cap.ep,hz);
-  return {xiPts, cap, html:`${row('FWD')}${row('MID')}${row('DEF')}${row('GKP')}
-    <div class="bench"><div class="lab">Bench</div><div class="pl">${bench.map(p=>tile(p,hz,false,o(p))).join('')}</div></div>`};
+  const d = state.data, G = []; for(let g=0; g<hz; g++) G.push(pickGW(sq, g));
+  const order = {GKP:0,DEF:1,MID:2,FWD:3};
+  const rows = sq.slice().sort((a,b) => order[a.pos]-order[b.pos] || sum(b.ep,hz)-sum(a.ep,hz));
+  const capCount = new Map(); G.forEach(x => capCount.set(x.cap.code,(capCount.get(x.cap.code)||0)+1));
+  const topCap = rows.reduce((a,p) => (capCount.get(p.code)||0)>(capCount.get(a.code)||0)?p:a, rows[0]);
+  const xiPts = G.reduce((t,x)=>t+x.pts,0);
+  const head = `<tr><th class="nm">Player</th>${G.map((x,g)=>`<th>${d.horizon[g]}</th>`).join('')}<th class="tt">XI pts</th></tr>`;
+  const body = rows.map(p => {
+    let starts = 0, pts = 0; const off = [];
+    const cells = G.map((x,g) => {
+      const st = x.xi.has(p.code), cp = x.cap.code===p.code, e = p.ep[g];
+      if(st){ starts++; pts += e*(cp?2:1); } else if(p.fx[g]!=='BLANK') off.push({g, e, cut:p.pos==='GKP'?x.gk:x.cut});
+      if(p.fx[g]==='BLANK') return `<td class="c off" title="GW ${d.horizon[g]}: no fixture"><b>-</b></td>`;
+      return `<td class="c ${st?'s':'b'}${cp?' cap':''}" title="GW ${d.horizon[g]} ${esc(p.fx[g])}: ${f1(e)} points, ${cp?'captain':st?'in the XI':'on the bench'}"><b>${f1(e)}</b><i>${esc(p.fx[g])}</i></td>`;
+    }).join('');
+    const isNew = ownedSet && !ownedSet.has(p.code), lk = state.locked.has(p.code), open = state.srow===p.code;
+    const why = starts===hz ? `Starts every week.` : starts===0 ? `Never makes the XI over this period.` :
+      `Starts ${starts} of ${hz}. Benched when the player he is up against scores more: ` + off.slice(0,4).map(o=>`GW ${d.horizon[o.g]} (${f1(o.e)} vs ${f1(o.cut)})`).join(', ') + (off.length>4?', ...':'') + '.';
+    const act = open ? `<tr class="act pos-${p.pos}"><td colspan="${hz+2}"><div class="why">${why} Price £${p.price.toFixed(1)}m${p.own!=null?`, owned by ${p.own.toFixed(1)}%`:''}.</div>
+      <div class="tb"><button type="button" data-lock="${p.code}" aria-pressed="${lk}">${lk?'Kept':'Keep in squad'}</button>${ownedSet&&!isNew?'':`<button type="button" data-ban="${p.code}">Swap out</button>`}</div></td></tr>` : '';
+    return `<tr class="pr pos-${p.pos}"><th class="nm" scope="row"><button type="button" data-srow="${p.code}" aria-expanded="${open}">${medical(p)}<span class="n1">${esc(short(p.name))}${isNew?'<em>NEW</em>':''}${lk?'<em>KEPT</em>':''}</span><span class="n2">${p.pos} ${p.team} £${p.price.toFixed(1)}</span></button></th>${cells}<td class="tt"><b>${f1(pts)}</b></td></tr>${act}`;
+  }).join('');
+  const foot = `<tr class="ft"><th class="nm">XI total</th>${G.map(x=>`<td><b>${f1(x.pts)}</b></td>`).join('')}<td class="tt"><b>${f1(xiPts)}</b></td></tr>
+    <tr class="ft2"><th class="nm">Captain</th>${G.map(x=>`<td title="${esc(x.cap.name)}">${esc(short(x.cap.name).slice(0,5))}</td>`).join('')}<td></td></tr>
+    <tr class="ft2"><th class="nm">Shape</th>${G.map(x=>`<td>${x.shape}</td>`).join('')}<td></td></tr>`;
+  return {xiPts, cap:topCap, capN:capCount.get(topCap.code)||0, html:`<div class="gwt"><table><thead>${head}</thead><tbody>${body}</tbody><tfoot>${foot}</tfoot></table></div>
+    <p class="sqnote">How each week is chosen: the XI is the best legal eleven by projected points (one goalkeeper, at least 3 defenders, 2 midfielders and 1 forward), the top scorer wears the armband and counts double. Shaded cells start, faded cells are on the bench, and the small text is the opponent, with (H) home or (A) away. A boxed cell is the captain. Tap a player for his weekly reasoning, Keep and Swap.</p>`};
 }
 const horizonLabel = hz => hz===1 ? 'the next gameweek' : hz+' gameweeks';
 const MEDNOTE = 'A red or amber plus marks a player who is injured, suspended or doubtful: his projection already allows for missed games, but injury news changes fast, so use Swap if you disagree.';
@@ -595,8 +646,8 @@ function renderSquad(){
   const L = lineupHTML(state.squad.squad, hz);
   $('#sqout').innerHTML = `<div class="sqsum"><div><b>${f1(L.xiPts)}</b><span>points from the XI with the captain doubled, over ${horizonLabel(hz)}</span></div>
     <div><b>£${state.squad.spent.toFixed(1)}m</b><span>spent, £${(state.budget-state.squad.spent).toFixed(1)}m left</span></div>
-    <div><b>${esc(L.cap.name)}</b><span>captain, ${f1(sum(L.cap.ep,hz))} points</span></div></div>
-    <p class="sqnote">Lineups can change each gameweek; this shows the XI that scores most over the whole period. Keep a player to hold him through a rebuild, or Swap to exclude him. ${MEDNOTE}</p>${L.html}`;
+    <div><b>${esc(short(L.cap.name))}</b><span>captain in ${L.capN} of ${hz} weeks</span></div></div>
+    <p class="sqnote">${MEDNOTE}</p>${L.html}`;
 }
 
 /* ---------- transfers: what is a transfer worth? ---------- */
@@ -678,8 +729,8 @@ function renderPlan(hz, T){
   out.innerHTML = head + `<div class="plan"><div class="ph">Projected points gained over ${horizonLabel(hz)}, before and after hits</div>
       <div class="phd"><span></span><span>Gain</span><span>Hit</span><span>Net</span></div>${tbl}
       <div class="moves">${mv}</div></div>${wild}
-    <div class="sqsum"><div><b>${f1(L.xiPts)}</b><span>XI points with the captain doubled</span></div><div><b>${esc(L.cap.name)}</b><span>captain, ${f1(sum(L.cap.ep,hz))} points</span></div><div><b>${sel.k}</b><span>transfers, ${ft} free</span></div></div>
-    <p class="sqnote">${MEDNOTE} New players show a NEW tag: Swap one to rule him out and re-plan. Keep a player to stop him being sold.</p>${L.html}`;
+    <div class="sqsum"><div><b>${f1(L.xiPts)}</b><span>XI points with the captain doubled</span></div><div><b>${esc(short(L.cap.name))}</b><span>captain in ${L.capN} of ${hz} weeks</span></div><div><b>${sel.k}</b><span>transfers, ${ft} free</span></div></div>
+    <p class="sqnote">${MEDNOTE} New players show a NEW tag: tap one and Swap him out to re-plan. Keep a player to stop him being sold.</p>${L.html}`;
 }
 function planNow(){
   const hz = +$('#sq-hz').value || state.data.horizon.length, T = curTeam();
@@ -725,6 +776,7 @@ document.addEventListener('click', ev => {
   else if(b.id==='s-next'){ state.sort='next'; render(); }
   else if(b.dataset.vb){ state.vbase=b.dataset.vb; document.querySelectorAll('#vb button').forEach(x=>x.setAttribute('aria-pressed',x===b)); render(); }
   else if(b.dataset.v){ setView(b.dataset.v); }
+  else if(b.dataset.srow){ const c=+b.dataset.srow; state.srow = state.srow===c?null:c; renderSquad(); }
   else if(b.dataset.lock){ const c=+b.dataset.lock; state.locked.has(c)?state.locked.delete(c):state.locked.add(c); renderSquad(); }
   else if(b.dataset.ban){ const c=+b.dataset.ban; state.banned.add(c); state.locked.delete(c); buildSquad(); }
   else if(b.dataset.sel){ state.sel=+b.dataset.sel; renderSquad(); }
