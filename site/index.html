@@ -187,6 +187,7 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
 .mv{display:grid;grid-template-columns:1fr auto 1fr;gap:6px;align-items:center}
 .mv .o{color:var(--ink2)} .mv .i{font-weight:600;text-align:right} .mv .ar{color:var(--ink2)}
 .mv small{display:block;color:var(--ink2);font:500 .72rem var(--num)}
+.item.mine .row{background:color-mix(in srgb,var(--p,#888) 14%,transparent);box-shadow:inset 3px 0 0 var(--p,#888)}
 .sqnote{font-size:.78rem;color:var(--ink2);margin:0 2px 10px}
 .gwt{overflow-x:auto;background:var(--card);border-radius:14px;margin-bottom:8px}
 .gwt table{border-collapse:separate;border-spacing:0;width:100%;font-variant-numeric:tabular-nums}
@@ -512,7 +513,8 @@ function render(){
   $('#s-total').textContent = hz===1 ? 'Next GW' : `Next ${hz} GWs`;
   $('#count').textContent = `${rows.length} player${rows.length===1?'':'s'}`;
   const nf = activeFilters(); $('#fn').hidden = !nf; $('#fn').textContent = nf;
-  const shown = rows.slice(0,120);
+  const T0 = curTeam(), mineSet = new Set(T0&&!T0.error&&T0.squad ? T0.squad.map(x=>x.code) : []);
+  const shown = rows.slice(0,300);
   if(!shown.length){ $('#list').innerHTML = '<div class="empty">No players match these filters. Open Filters and press Reset.</div>'; return; }
   $('#list').className = state.intro ? 'intro' : '';
   $('#list').innerHTML = shown.map(p => {
@@ -521,14 +523,14 @@ function render(){
       : `<i class="${out(p)?'out':''}" style="--i:${i};height:${Math.max(2,Math.min(100,Math.round(e/9*100)))}%" title="GW ${d.horizon[i]} ${esc(p.fx[i])}: ${f1(e)}"></i>`).join('');
     const open = state.open===p.code;
     const nx = p.fx[0].split(', ')[0];
-    return `<div class="item pos-${p.pos}${open?' open':''}"><button class="row" data-c="${p.code}" aria-expanded="${open}">
+    return `<div class="item pos-${p.pos}${open?' open':''}${mineSet.has(p.code)?' mine':''}"><button class="row" data-c="${p.code}" aria-expanded="${open}">
       <span class="l1"><span class="chip">${p.pos}</span><span class="nm">${esc(p.name)}</span>${flag(p)}<span class="mt">${p.team}${p.price!=null?` <b>£${p.price.toFixed(1)}</b>`:''}${p.own!=null?` ${p.own.toFixed(1)}%`:''}</span></span>
       <span class="sc"><span class="strip" aria-hidden="true">${bars}</span><span class="nx">${esc(nx)}</span></span>
       <span class="tot">${state.sort==='value'
         ? `<div class="a">${p.price==null?'-':sg(p._v)}</div><div class="b">${sg(p._pa)} pts</div>`
         : `<div class="a">${f1(p._t)}</div><div class="b">${hz===1?'':'GW'+d.horizon[0]+' '+f1(p.ep[0])}</div>`}</span></button>
       <div class="dwrap"><div>${open?detail(p):''}</div></div></div>`;
-  }).join('') + (rows.length>120?`<div class="empty">Showing the top 120 of ${rows.length}. Use the filters to narrow down.</div>`:'');
+  }).join('') + (rows.length>300?`<div class="empty">Showing the top 300 of ${rows.length}. Use the filters to narrow down.</div>`:'');
   state.intro = false;
 }
 
@@ -704,8 +706,7 @@ function lineupHTML(sq, hz, ownedSet, ro){
     <tr class="ft2"><th class="nm">Bench</th>${benchW.map((v,g)=>`<td${g===bb.g?' class="bbc"':''}>${f1(v)}</td>`).join('')}<td></td></tr>`;
   const chips = `<div class="chips"><div class="cc tcw"><b>Triple captain</b><span>GW ${d.horizon[tc.g]}: ${esc(tc.p.name)}</span><em>+${f1(tc.gain)} points</em></div>
     <div class="cc bbw"><b>Bench boost</b><span>GW ${d.horizon[bb.g]}</span><em>+${f1(bb.gain)} points</em></div></div>`;
-  return {xiPts, tc, bb, cap:topCap, capN:capCount.get(topCap.code)||0, html:`${chips}<div class="gwt"><table><thead>${head}</thead><tbody>${body}</tbody><tfoot>${foot}</tfoot></table></div>
-    <p class="sqnote">How each week is chosen: the XI is the best legal eleven by projected points (one goalkeeper, at least 3 defenders, 2 midfielders and 1 forward), the top scorer wears the armband and counts double. The Bench line is what the four substitutes score each week, to compare with the XI total. Shaded cells start, faded cells are on the bench, and the small text is the opponent, with (H) home or (A) away. A boxed cell is the captain. TC and BB mark the best week for each chip, using this squad as it stands. Tap a player for his weekly reasoning, Keep and Swap.</p>`};
+  return {xiPts, tc, bb, cap:topCap, capN:capCount.get(topCap.code)||0, html:`${chips}<div class="gwt"><table><thead>${head}</thead><tbody>${body}</tbody><tfoot>${foot}</tfoot></table></div>`};
 }
 /* ---------- penalties ---------- */
 function penInfo(p){
@@ -817,7 +818,7 @@ function renderTeam(hz, T){
       <span class="tg"><b>${sg2(o.gain)}</b>${hit?`<small>${sg2(o.gain-hit)} after hit</small>`:'<small>points</small>'}</span></button>${det}</div>`;
   }).join('');
   const lst = R.opts.length
-    ? `<div class="tohd"><b>Best ${R.opts.length} single transfers</b><span>Ranked by projected points gained over ${horizonLabel(hz)}, using your best XI each week with the captain doubled. ${ftLeft>0?`You have ${ftLeft} free transfer${ftLeft>1?'s':''}.`:`With no free transfer left, each costs ${HIT} points: the second figure is after that.`} Tap one to see it week by week, then make it to see your squad and the next best transfers change.</span></div>${rows}`
+    ? `<div class="tohd"><b>Best ${R.opts.length} single transfers</b><span>${ftLeft>0?`You have ${ftLeft} free transfer${ftLeft>1?'s':''}.`:`With no free transfer left, each costs ${HIT} points: the second figure is after that.`}</span></div>${rows}`
     : '<div class="empty">No single transfer improves this squad within your budget and the three-per-club rule.</div>';
   const wi = nm ? `<div class="wi"><div><b>${nm} transfer${nm>1?'s':''} made</b> <span>${state.moves.map(m=>`${esc(by.get(m.o).name)} to ${esc(by.get(m.i).name)}`).join(', ')}</span></div>
     <div class="wn"><span><b>${sg2(L.xiPts-base0)}</b> points</span><span><b>${hitSoFar?'\u2212'+hitSoFar:'0'}</b> hit</span><span><b>${sg2(L.xiPts-base0-hitSoFar)}</b> net</span></div>
