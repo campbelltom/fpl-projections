@@ -848,7 +848,7 @@ function transferOptions(data, hz, T, sq){
   const E = data.players.map(p => p.ep.slice(0,hz));
   const idx = new Map(data.players.map((p,k)=>[p.code,k]));
   const ob = p => ({pos:p.pos, k:idx.get(p.code), p});
-  const cur = sq.map(ob), base = lineupScore(cur, E, hz, 0);
+  const cur = sq.map(ob), base = lineupScore(cur, E, hz, 0), base1 = lineupScore(cur, E, 1, 0);
   const bank = T.bank, cnt = {}; sq.forEach(p => cnt[p.team]=(cnt[p.team]||0)+1);
   const cands = data.players.filter(p => p.price!=null && !owned.has(p.code) && !state.banned.has(p.code) && p.status!=='n');
   const out = [];
@@ -860,8 +860,10 @@ function transferOptions(data, hz, T, sq){
       if(p.price > bank + sell + 1e-9) continue;
       if(p.team!==po.team && (cnt[p.team]||0) >= 3) continue;
       const q = cur.slice(); q[a] = ob(p);
+      const gain1 = lineupScore(q, E, 1, 0) - base1;          // it has to pay off in the coming gameweek, or it can wait
+      if(gain1 <= 0.005) continue;
       const gain = lineupScore(q, E, hz, 0) - base;
-      if(gain > 0.005) out.push({out:po, inn:p, sell, gain, left:bank+sell-p.price});
+      if(gain > 0.005) out.push({out:po, inn:p, sell, gain, gain1, left:bank+sell-p.price});
     }
   });
   out.sort((x,y)=>y.gain-x.gain);
@@ -897,10 +899,10 @@ function renderTeam(hz, T){
     return `<div class="to pos-${o.inn.pos}${open?' open':''}"><button type="button" class="tr" data-opt="${i}" aria-expanded="${open}">
       <span class="tl"><span class="in"><em>IN</em>${medical(o.inn)}<b>${esc(o.inn.name)}</b> <small>${o.inn.team} ${o.inn.pos} £${o.inn.price.toFixed(1)}m${o.inn.own!=null?' · '+o.inn.own.toFixed(1)+'%':''}</small></span>
       <span class="ot"><em>OUT</em><b>${esc(o.out.name)}</b> <small>${o.out.team} £${o.sell.toFixed(1)}m</small></span></span>
-      <span class="tg"><b>${sg2(o.gain)}</b>${hit?`<small>${sg2(o.gain-hit)} after hit</small>`:'<small>points</small>'}</span></button>${det}</div>`;
+      <span class="tg"><b>${sg2(o.gain)}</b>${hit?`<small>${sg2(o.gain-hit)} after hit</small>`:`<small>${sg2(o.gain1)} in GW ${d.horizon[0]}</small>`}</span></button>${det}</div>`;
   }).join('');
   const lst = R.opts.length
-    ? `<div class="tohd"><b>Best ${R.opts.length} single transfers</b><span>${ftLeft>0?`You have ${ftLeft} free transfer${ftLeft>1?'s':''}.`:`With no free transfer left, each costs ${HIT} points: the second figure is after that.`}</span></div>${rows}`
+    ? `<div class="tohd"><b>Best ${R.opts.length} single transfers</b><span>Only moves that add points in the coming gameweek are listed; the rest can wait. ${ftLeft>0?`You have ${ftLeft} free transfer${ftLeft>1?'s':''}.`:`With no free transfer left, each costs ${HIT} points: the second figure is after that.`}</span></div>${rows}`
     : '<div class="empty">No single transfer improves this squad within your budget and the three-per-club rule.</div>';
   const wi = nm ? `<div class="wi"><div><b>${nm} transfer${nm>1?'s':''} made</b> <span>${state.moves.map(m=>`${esc(by.get(m.o).name)} to ${esc(by.get(m.i).name)}`).join(', ')}</span></div>
     <div class="wn"><span><b>${sg2(L.xiPts-base0)}</b> points</span><span><b>${hitSoFar?'\u2212'+hitSoFar:'0'}</b> hit</span><span><b>${sg2(L.xiPts-base0-hitSoFar)}</b> net</span></div>
