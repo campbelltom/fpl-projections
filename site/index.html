@@ -188,6 +188,22 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
 .mv .o{color:var(--ink2)} .mv .i{font-weight:600;text-align:right} .mv .ar{color:var(--ink2)}
 .mv small{display:block;color:var(--ink2);font:500 .72rem var(--num)}
 .item.mine .row{background:color-mix(in srgb,var(--p,#888) 14%,transparent);box-shadow:inset 3px 0 0 var(--p,#888)}
+.luctl{display:flex;gap:8px;align-items:end;margin-bottom:6px}.luctl label{flex:1;font:600 .7rem var(--num);color:var(--ink2)}.luctl select{width:100%;height:36px}
+.luctl button{height:36px;border:0;border-radius:10px;background:var(--card);padding:0 12px;font:600 .78rem var(--num);color:var(--ink)}
+.lc2{background:var(--card);border-radius:14px;margin-bottom:5px;overflow:hidden}
+.lh{all:unset;box-sizing:border-box;cursor:pointer;display:flex;align-items:center;gap:8px;width:100%;padding:9px 12px;min-height:40px}
+.lh:focus-visible{outline:3px solid var(--focus)}.lh b{font:700 1rem var(--num);width:40px}
+.lf{font:500 .76rem var(--num);color:var(--ink2);flex:1}.ls{font:600 .76rem var(--num);color:var(--ink2)}
+.lq{font:700 .7rem var(--num);padding:2px 7px;border-radius:8px}
+.lq.hi{background:color-mix(in srgb,#2a9d5c 22%,transparent)}.lq.mid{background:color-mix(in srgb,#e0a21a 26%,transparent)}.lq.lo{background:color-mix(in srgb,#d64545 24%,transparent)}
+.lbody{padding:0 12px 8px}.lg{display:grid;grid-template-columns:34px 1fr;gap:6px;padding:4px 0;border-top:1px solid var(--line)}
+.lk{font:700 .62rem var(--num);color:var(--ink2);padding-top:5px}
+.lr{display:grid;grid-template-columns:minmax(0,1fr) 90px 36px;gap:6px;align-items:center;min-height:24px}
+.lr .ln{font:600 .84rem var(--num);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.lr b{font:700 .74rem var(--num);text-align:right}
+.lr.out{opacity:.55}.lr.out .ln{font-weight:500}.lr.mine .ln{box-shadow:inset 3px 0 0 var(--ink);padding-left:6px}
+.lb{height:7px;border-radius:4px;background:var(--line);overflow:hidden;display:block}.lb i{display:block;height:100%;border-radius:4px}
+.lb.hi i{background:#2a9d5c}.lb.mid i{background:#e0a21a}.lb.lo i{background:#d64545}
+.lr .med{position:static;display:inline-grid;width:12px;height:12px;border-radius:6px;vertical-align:-2px;margin-left:4px}.lr .med svg{width:7px;height:7px}
 .sqnote{font-size:.78rem;color:var(--ink2);margin:0 2px 10px}
 .gwt{overflow-x:auto;background:var(--card);border-radius:14px;margin-bottom:8px}
 .gwt table{border-collapse:separate;border-spacing:0;width:100%;font-variant-numeric:tabular-nums}
@@ -329,12 +345,13 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
       <button class="ic" id="lockbtn" type="button" aria-label="Lock"><svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg></button>
     </div>
     <div class="sub" id="meta"></div>
-    <div class="views sort wide" id="views" role="group" aria-label="View"><button type="button" data-v="players" aria-pressed="true">Players</button><button type="button" data-v="squad" aria-pressed="false">Squad</button><button type="button" data-v="pens" aria-pressed="false">Penalties</button></div>
+    <div class="views sort wide" id="views" role="group" aria-label="View"><button type="button" data-v="players" aria-pressed="true">Players</button><button type="button" data-v="squad" aria-pressed="false">Squad</button><button type="button" data-v="lineups" aria-pressed="false">Lineups</button><button type="button" data-v="pens" aria-pressed="false">Penalties</button></div>
     <div id="pctl"><input class="search" id="q" type="search" placeholder="Search players" aria-label="Search players">
     <div class="bar2"><span id="count"></span><span class="sp"></span>
       <div class="sort" role="group" aria-label="Sort by"><button id="s-total" type="button"></button><button id="s-next" type="button"></button><button id="s-value" type="button">Value</button></div></div></div>
   </div></header>
   <div class="wrap"><div id="list"></div>
+    <section id="lineupview" hidden></section>
     <section id="pensview" hidden></section>
     <section id="squadview" hidden>
       <div class="sqctl">
@@ -374,7 +391,7 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
 'use strict';
 const $ = s => document.querySelector(s);
 const POS = ['All','GKP','DEF','MID','FWD'];
-const state = {pos:'All', team:'', q:'', hz:8, avail:true, sort:'total', open:null, pmin:0, pmax:99, lo:0, hi:99, data:null, intro:true, vbase:'starter', view:'players', mine:-1, ft:1, plan:null, sel:null, budget:100, locked:new Set(), banned:new Set(), squad:null, srow:null, opt:null, wc:null, wcg:null, wcv:'fh', moves:[], optList:[]};
+const state = {pos:'All', team:'', q:'', hz:8, avail:true, sort:'total', open:null, pmin:0, pmax:99, lo:0, hi:99, data:null, intro:true, vbase:'starter', view:'players', mine:-1, ft:1, plan:null, sel:null, budget:100, locked:new Set(), banned:new Set(), squad:null, srow:null, opt:null, wc:null, wcg:null, wcv:'fh', lug:0, luo:new Set(), moves:[], optList:[]};
 const store = {
   get(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } },
   set(k,v){ try{ localStorage.setItem(k,v); }catch(e){} },
@@ -708,6 +725,39 @@ function lineupHTML(sq, hz, ownedSet, ro){
     <div class="cc bbw"><b>Bench boost</b><span>GW ${d.horizon[bb.g]}</span><em>+${f1(bb.gain)} points</em></div></div>`;
   return {xiPts, tc, bb, cap:topCap, capN:capCount.get(topCap.code)||0, html:`${chips}<div class="gwt"><table><thead>${head}</thead><tbody>${body}</tbody><tfoot>${foot}</tfoot></table></div>`};
 }
+/* ---------- predicted lineups ---------- */
+const LU_MIN = {DEF:3, MID:2, FWD:1}, LU_MAX = {DEF:5, MID:5, FWD:3};
+function predictXI(list, g){
+  const P = x => x.p60[g]||0, by = {GKP:[],DEF:[],MID:[],FWD:[]};
+  list.forEach(p => by[p.pos].push(p)); for(const k in by) by[k].sort((a,b)=>P(b)-P(a));
+  const xi = by.GKP.slice(0,1), cnt = {DEF:0,MID:0,FWD:0};
+  for(const k in LU_MIN){ by[k].slice(0,LU_MIN[k]).forEach(p=>xi.push(p)); cnt[k]=Math.min(LU_MIN[k],by[k].length); }
+  const rest = ['DEF','MID','FWD'].flatMap(k=>by[k].slice(cnt[k])).sort((a,b)=>P(b)-P(a));
+  for(const p of rest){ if(xi.length>=11) break; if(cnt[p.pos]<LU_MAX[p.pos]){ xi.push(p); cnt[p.pos]++; } }
+  return {xi, by, shape:`${cnt.DEF}-${cnt.MID}-${cnt.FWD}`};
+}
+const luBar = v => `<span class="lb ${v>=.8?'hi':v>=.5?'mid':'lo'}"><i style="width:${Math.round(v*100)}%"></i></span><b>${Math.round(v*100)}%</b>`;
+function renderLineups(){
+  const d = state.data, g = Math.min(state.lug, d.horizon.length-1);
+  const T0 = curTeam(), mine = new Set(T0&&!T0.error&&T0.squad ? T0.squad.map(x=>x.code) : []);
+  const teams = new Map();
+  d.players.forEach(p => { if(p.fx[g]!=='BLANK' && p.p60 && p.p60[g]>0.03){ if(!teams.has(p.team)) teams.set(p.team,[]); teams.get(p.team).push(p); } });
+  const cards = [...teams.keys()].sort().map(t => {
+    const list = teams.get(t), {xi,by,shape} = predictXI(list,g), inXI = new Set(xi.map(p=>p.code));
+    const fxs = {}; list.forEach(p=>{ fxs[p.fx[g]] = (fxs[p.fx[g]]||0)+1; });
+    const fx = Object.entries(fxs).sort((a,b)=>b[1]-a[1])[0][0];
+    const cert = xi.reduce((a,p)=>a+(p.p60[g]||0),0)/11, open = state.luo.has(t);
+    const row = (p,out) => `<div class="lr${out?' out':''}${mine.has(p.code)?' mine':''}"><span class="ln">${esc(p.name)}${medical(p)}</span>${luBar(p.p60[g])}</div>`;
+    const sect = ['GKP','DEF','MID','FWD'].map(k => {
+      const st = xi.filter(p=>p.pos===k), ch = by[k].filter(p=>!inXI.has(p.code) && p.p60[g]>=0.08).slice(0,3);
+      return `<div class="lg"><span class="lk">${k}</span><div>${st.map(p=>row(p,false)).join('')}${ch.map(p=>row(p,true)).join('')}</div></div>`;
+    }).join('');
+    return `<div class="lc2${open?' open':''}"><button type="button" class="lh" data-lut="${t}" aria-expanded="${open}"><b>${t}</b><span class="lf">${esc(fx)}</span><span class="ls">${shape}</span><span class="lq ${cert>=.8?'hi':cert>=.65?'mid':'lo'}">${Math.round(cert*100)}% sure</span></button>${open?`<div class="lbody">${sect}</div>`:''}</div>`;
+  }).join('');
+  const opts = d.horizon.map((h,i)=>`<option value="${i}"${i===g?' selected':''}>GW ${h}</option>`).join('');
+  $('#lineupview').innerHTML = `<div class="luctl"><label>Gameweek<select id="lu-gw" aria-label="Gameweek">${opts}</select></label><button type="button" id="lu-all">${state.luo.size?'Collapse all':'Expand all'}</button></div>
+    <p class="sqnote">Predicted XI for each club: the players most likely to play 60 minutes or more, shown with that chance. Faded rows are the players competing for a place. A low "sure" figure means the XI is hard to call.</p>${cards}`;
+}
 /* ---------- penalties ---------- */
 function penInfo(p){
   if(!p.pen) return '';
@@ -907,9 +957,9 @@ function buildSquad(){
 function setView(v){
   state.view = v;
   document.querySelectorAll('#views button').forEach(x=>x.setAttribute('aria-pressed',x.dataset.v===v));
-  const sqv = v==='squad', pv = v==='pens', other = sqv||pv;
-  $('#pctl').hidden = other; $('#list').hidden = other; $('#squadview').hidden = !sqv; $('#pensview').hidden = !pv; document.querySelector('.dock').hidden = other;
-  if(sqv) renderSquad(); else if(pv) renderPens(); else render();
+  const sqv = v==='squad', pv = v==='pens', lv = v==='lineups', other = sqv||pv||lv;
+  $('#pctl').hidden = other; $('#list').hidden = other; $('#squadview').hidden = !sqv; $('#pensview').hidden = !pv; $('#lineupview').hidden = !lv; document.querySelector('.dock').hidden = other;
+  if(sqv) renderSquad(); else if(pv) renderPens(); else if(lv) renderLineups(); else render();
 }
 window.FPL = {solveSquad, transferOptions, lineupScore, pickGW, state};
 
@@ -917,6 +967,8 @@ window.FPL = {solveSquad, transferOptions, lineupScore, pickGW, state};
 const sheet = $('#sheet');
 document.addEventListener('click', ev => {
   if(ev.target===sheet){ sheet.close(); return; }
+  const lt = ev.target.closest('button[data-lut]'); if(lt){ const t=lt.dataset.lut; state.luo.has(t)?state.luo.delete(t):state.luo.add(t); renderLineups(); return; }
+  if(ev.target.closest('#lu-all')){ if(state.luo.size) state.luo.clear(); else document.querySelectorAll('button[data-lut]').forEach(b=>state.luo.add(b.dataset.lut)); renderLineups(); return; }
   const wr = ev.target.closest('tr[data-wcg]'); if(wr){ const g=+wr.dataset.wcg; state.wcg = state.wcg===g?null:g; const b=$('#wcbox'); if(b) b.innerHTML = wcHTML(); return; }
   const wv = ev.target.closest('button[data-wcv]'); if(wv){ state.wcv = wv.dataset.wcv; const b=$('#wcbox'); if(b) b.innerHTML = wcHTML(); return; }
   const b = ev.target.closest('button'); if(!b) return;
@@ -954,6 +1006,7 @@ document.addEventListener('input', ev => {
   if(t.id==='q'){ state.q=t.value.trim().toLowerCase(); render(); }
   else if(t.id==='team'){ state.team=t.value; render(); }
   else if(t.id==='hz'){ state.hz=+t.value; render(); }
+  else if(t.id==='lu-gw'){ state.lug=+t.value; renderLineups(); }
   else if(t.id==='sq-team'){ state.mine=+t.value; const T=curTeam(); if(T&&T.ft!=null) state.ft=T.ft; state.squad=null; state.opt=null; state.moves=[]; state.srow=null; renderSquad(); }
   else if(t.id==='sq-hz'){ state.squad=null; state.opt=null; renderSquad(); }
   else if(t.id==='avail'){ state.avail=t.checked; render(); }

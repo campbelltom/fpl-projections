@@ -192,7 +192,7 @@ def _components(d: pd.DataFrame, pt, rules: Rules, params: Params, bonus: BonusM
 
 def aggregate_gameweek(d: pd.DataFrame) -> pd.DataFrame:
     """Sum fixtures within a gameweek (double gameweeks add up; blank gameweeks have no row)."""
-    cols = [c for c in d.columns if c.startswith("pts_")] + ["ep", "ep_cond60", "p_play", "m_exp", "lam_g", "lam_a", "p_cs", "p_dc", "e_saves", "e_gc"]
+    cols = [c for c in d.columns if c.startswith("pts_")] + ["ep", "ep_cond60", "p_play", "p60_eff", "m_exp", "lam_g", "lam_a", "p_cs", "p_dc", "e_saves", "e_gc"]
     g = d.groupby(["player_code", "gw"], as_index=False).agg({**{c: "sum" for c in cols}, "ep_sd": lambda x: float(np.sqrt((x ** 2).sum())),
                                                              "match_id": "count"})
     return g.rename(columns={"match_id": "n_fixtures"})
