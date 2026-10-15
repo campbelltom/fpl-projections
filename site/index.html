@@ -257,6 +257,21 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
 .tk .tbar{height:6px;border-radius:3px;background:var(--card2);overflow:hidden}.tk .tbar span{display:block;height:100%;background:var(--ink)}
 .tk b{font:700 .8rem var(--num);text-align:right}.tk small{grid-column:1/-1;font:500 .66rem var(--num);color:var(--ink2);margin-top:-2px}
 .pc p{font-size:.76rem;color:var(--ink2);margin:4px 0 0}
+.wt tr[data-wcg]{cursor:pointer}.wt tr.selw{outline:2px solid var(--ink);outline-offset:-2px}
+.wt th button{all:unset;cursor:pointer;display:block;width:100%;padding:2px 0;font:700 .82rem var(--num)}
+.wt th button:focus-visible{outline:3px solid var(--focus)}
+.wcp{background:var(--card2);border-radius:12px;padding:8px 10px;margin:6px 0}
+.wcv{display:flex;gap:4px;margin-bottom:6px}.wcv button{flex:1;height:32px;border:0;border-radius:9px;background:var(--card);font:600 .78rem var(--num);color:var(--ink2)}
+.wcv button[aria-pressed=true]{background:var(--ink);color:var(--bg)}.wcv button:disabled{opacity:.4}
+.wch{font-size:.8rem;margin-bottom:4px}
+.wl{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+.wl td{padding:3px 3px;font:500 .74rem var(--num);color:var(--ink2);border-top:1px solid var(--line);white-space:nowrap}
+.wl td.pn{font:600 .82rem var(--num);color:var(--ink);white-space:nowrap;max-width:150px;overflow:hidden;text-overflow:ellipsis}
+.wl td.pn .chip{margin-right:5px}.wl td.pe{text-align:right;font:700 .85rem var(--num);color:var(--ink)}
+.wl tr.s{background:color-mix(in srgb,var(--p) 16%,transparent)}.wl tr.b{opacity:.55}
+.wl .cm{font:700 .55rem var(--num);font-style:normal;background:var(--ink);color:var(--bg);border-radius:3px;padding:1px 3px;margin-left:4px}
+.wl .nw{font:700 .52rem var(--num);font-style:normal;color:var(--p);margin-left:4px}
+.wl .med{position:static;display:inline-grid;width:12px;height:12px;border-radius:6px;vertical-align:-2px;margin-left:4px}.wl .med svg{width:7px;height:7px}
 .tohd{margin:12px 2px 6px}.tohd b{display:block;font:700 1rem var(--num)}.tohd span{font-size:.78rem;color:var(--ink2)}
 .to{background:var(--card);border-radius:14px;margin-bottom:5px;overflow:hidden;border-left:4px solid var(--p)}
 .to .tr{all:unset;box-sizing:border-box;cursor:pointer;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center;width:100%;padding:8px 10px}
@@ -358,7 +373,7 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
 'use strict';
 const $ = s => document.querySelector(s);
 const POS = ['All','GKP','DEF','MID','FWD'];
-const state = {pos:'All', team:'', q:'', hz:8, avail:true, sort:'total', open:null, pmin:0, pmax:99, lo:0, hi:99, data:null, intro:true, vbase:'starter', view:'players', mine:-1, ft:1, plan:null, sel:null, budget:100, locked:new Set(), banned:new Set(), squad:null, srow:null, opt:null, wc:null, moves:[], optList:[]};
+const state = {pos:'All', team:'', q:'', hz:8, avail:true, sort:'total', open:null, pmin:0, pmax:99, lo:0, hi:99, data:null, intro:true, vbase:'starter', view:'players', mine:-1, ft:1, plan:null, sel:null, budget:100, locked:new Set(), banned:new Set(), squad:null, srow:null, opt:null, wc:null, wcg:null, wcv:'fh', moves:[], optList:[]};
 const store = {
   get(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } },
   set(k,v){ try{ localStorage.setItem(k,v); }catch(e){} },
@@ -840,6 +855,23 @@ function runWild(){
     setTimeout(next, 10);
   }, 20);
 }
+function wcPanel(c, st, fh){
+  const g = state.wcg, d = state.data;
+  if(g==null) return '<p class="sqnote">Tap a gameweek to see the squads behind these numbers.</p>';
+  const f = fh[g];
+  const views = [['me','Your team',c.sq],['wc','Wildcard',st.wild.squad],['fh','Free hit',f?f.squad:null]];
+  if(!views.find(v=>v[0]===state.wcv)[2]) state.wcv = 'me';
+  const sq = views.find(v=>v[0]===state.wcv)[2];
+  const mine = new Set(c.sq.map(p=>p.code)), pk = pickGW(sq, g), order = {GKP:0,DEF:1,MID:2,FWD:3};
+  const rows = sq.slice().sort((a,b)=>order[a.pos]-order[b.pos] || b.ep[g]-a.ep[g]).map(p => {
+    const st_ = pk.xi.has(p.code), cap = pk.cap.code===p.code;
+    return `<tr class="pos-${p.pos} ${st_?'s':'b'}"><td class="pn"><span class="chip">${p.pos}</span>${esc(p.name)}${cap?'<em class="cm">C</em>':''}${state.wcv!=='me'&&!mine.has(p.code)?'<em class="nw">NEW</em>':''}${medical(p)}</td><td>${p.team} £${p.price.toFixed(1)}</td><td>${p.fx[g]==='BLANK'?'-':esc(p.fx[g])}</td><td class="pe">${p.fx[g]==='BLANK'?'-':f1(p.ep[g])}</td></tr>`;
+  }).join('');
+  return `<div class="wcp"><div class="wcv" role="group" aria-label="Squad to show">${views.map(v=>`<button type="button" data-wcv="${v[0]}" aria-pressed="${state.wcv===v[0]}"${v[2]?'':' disabled'}>${v[1]}</button>`).join('')}</div>
+    <div class="wch">GW ${d.horizon[g]}: <b>${f1(pk.pts)}</b> points from the XI, ${pk.shape}, captain ${esc(short(pk.cap.name))}</div>
+    <table class="wl"><tbody>${rows}</tbody></table>
+    <div class="sqnote">Shaded rows are the XI, faded rows the bench.</div></div>`;
+}
 function wcHTML(){
   const c = wcCtx(); if(!c) return '';
   const st = state.wc;
@@ -851,12 +883,13 @@ function wcHTML(){
   const bestFH = fh.length ? fh.reduce((a,b)=>b.gain>a.gain?b:a) : null;
   const sg2 = x => (x>=0?'+':'\u2212')+Math.abs(x).toFixed(1);
   const rows = Array.from({length:hz}, (_,g) => { const f = fh[g]; const best = bestFH && f && f.g===bestFH.g && !st.busy;
-    return `<tr${best?' class="bestw"':''}><th>${d.horizon[g]}${best?'<u>FH</u>':''}</th><td>${f1(mine[g])}</td><td>${f1(wcw[g])}<small class="${wcw[g]-mine[g]>=0?'up':'dn'}">${sg2(wcw[g]-mine[g])}</small></td><td>${f?f1(f.pts):'...'}${f?`<small class="${f.gain>=0?'up':'dn'}">${sg2(f.gain)}</small>`:''}</td></tr>`; }).join('');
+    return `<tr data-wcg="${g}" class="${best?'bestw ':''}${state.wcg===g?'selw':''}"><th><button type="button" data-wcg="${g}" aria-pressed="${state.wcg===g}">${d.horizon[g]}${best?'<u>FH</u>':''}</button></th><td>${f1(mine[g])}</td><td>${f1(wcw[g])}<small class="${wcw[g]-mine[g]>=0?'up':'dn'}">${sg2(wcw[g]-mine[g])}</small></td><td>${f?f1(f.pts):'...'}${f?`<small class="${f.gain>=0?'up':'dn'}">${sg2(f.gain)}</small>`:''}</td></tr>`; }).join('');
   const out = st.wild.squad.filter(p=>!c.sq.some(q=>q.code===p.code)).map(p=>esc(p.name)), gone = c.sq.filter(p=>!st.wild.squad.some(q=>q.code===p.code)).map(p=>esc(p.name));
   const L = lineupHTML(st.wild.squad, hz, new Set(c.sq.map(p=>p.code)), true);
   return `<div class="wc"><div class="wh"><b>Wildcard and free hit</b><span>Budget £${c.B.toFixed(1)}m. The wildcard is the best squad for the whole period; a free hit is the best squad for one week only, then your team returns.${st.busy?` Working: ${st.done} of ${hz+1} done.`:''}</span></div>
     <div class="sqsum"><div><b>${f1(myTot)}</b><span>your team over ${horizonLabel(hz)}</span></div><div><b>${f1(wcTot)}</b><span>wildcard squad, ${sg2(wcTot-myTot)}</span></div><div><b>${bestFH&&!st.busy?'GW '+d.horizon[bestFH.g]:'...'}</b><span>${bestFH&&!st.busy?'best free hit week, '+sg2(bestFH.gain):'working out'}</span></div></div>
     <table class="wt"><thead><tr><th>GW</th><th>Your XI</th><th>Wildcard</th><th>Free hit</th></tr></thead><tbody>${rows}</tbody></table>
+    ${wcPanel(c, st, fh)}
     <p class="sqnote">Each figure is the best XI that week with the captain doubled. The wildcard column uses one squad for every week; the free hit column rebuilds the whole squad for that week alone, so it is always at least as high. The wildcard brings in ${out.length} new players and removes ${gone.length}. No transfer hits are involved.</p>
     <details><summary>Wildcard squad</summary>${L.html}</details>
     <button type="button" class="do" id="wc-run">Run again</button></div>`;
@@ -883,6 +916,8 @@ window.FPL = {solveSquad, transferOptions, lineupScore, pickGW, state};
 const sheet = $('#sheet');
 document.addEventListener('click', ev => {
   if(ev.target===sheet){ sheet.close(); return; }
+  const wr = ev.target.closest('tr[data-wcg]'); if(wr){ const g=+wr.dataset.wcg; state.wcg = state.wcg===g?null:g; const b=$('#wcbox'); if(b) b.innerHTML = wcHTML(); return; }
+  const wv = ev.target.closest('button[data-wcv]'); if(wv){ state.wcv = wv.dataset.wcv; const b=$('#wcbox'); if(b) b.innerHTML = wcHTML(); return; }
   const b = ev.target.closest('button'); if(!b) return;
   if(b.dataset.p){ state.pos=b.dataset.p; document.querySelectorAll('#pos button').forEach(x=>x.setAttribute('aria-pressed',x===b)); render(); }
   else if(b.dataset.c){ const c=+b.dataset.c; state.open = state.open===c?null:c; render(); const nb=document.querySelector(`[data-c="${c}"]`); if(nb){ nb.focus({preventScroll:true}); if(state.open===c) nb.closest('.item').scrollIntoView({block:'nearest',behavior:'smooth'}); } }
