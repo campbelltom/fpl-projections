@@ -85,13 +85,23 @@ class BonusModel:
 
 
 def expected_points(ctx: pd.DataFrame, prof: pd.DataFrame, avail: pd.DataFrame, rules: Rules, params: Params,
-                    bonus: BonusModel | None = None, norm: tuple | None = None) -> pd.DataFrame:
+                    bonus: BonusModel | None = None, norm: tuple | None = None,
+                    mins_fx: pd.DataFrame | None = None) -> pd.DataFrame:
     """ctx: per (team, fixture) from fixture_context; prof: per player (needs team_code and position);
     avail: per (player_code, gw_rel) -> factor.  Returns one row per player x fixture with components."""
     bonus = bonus or BonusModel.load()
     d = prof.reset_index().merge(ctx, left_on="team_code", right_on="team", how="inner")
     d = d.merge(avail, on=["player_code", "gw"], how="left")
     d["avail"] = d["avail"].fillna(1.0)
+    if mins_fx is not None and "p_start" in d:
+        # fixture-specific start / sub probabilities (rest, rival strength, ...) replace the player-level ones
+        d = d.merge(mins_fx, on=["player_code", "match_id"], how="left")
+        ok = d["p_start_fx"].notna() & ~d["mins_fixed"].fillna(False).astype(bool)
+        q0 = d["q60s"].clip(0.05, 1.0)
+        d["p_start"] = np.where(ok, d["p_start_fx"], d["p_start"])
+        d["p_sub"] = np.where(ok, d["p_sub_fx"], d["p_sub"])
+        d["p60"] = np.where(ok, d["p_start"] * q0, d["p60"])
+        d["pS"] = np.where(ok, d["p_start"] * (1 - q0) + d["p_sub"], d["pS"])
     pos = d["position"]
     p60 = d["avail"] * d["p60"]
     pS = d["avail"] * d["pS"]

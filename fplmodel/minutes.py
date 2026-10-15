@@ -15,11 +15,14 @@ import numpy as np
 import pandas as pd
 from sklearn.linear_model import LogisticRegression
 
+from .fxfeat import rival_features
+
 HLS = (2.0, 5.0, 12.0)           # memory lengths in the player's own available matches
 POS = ["GKP", "DEF", "MID", "FWD"]
 FEATS = (["e60_h2", "e60_h5", "e60_h12", "ep_h5", "em_h5", "last1", "last2", "conf", "e60_h5_c", "e60_h12_c",
           "es_h2", "es_h5", "es_h12", "esub_h5", "lasts1", "lasts2", "es_h5_c", "es_h12_c",
-          "tenure", "early", "n_log"] + [f"pos_{p}" for p in POS])
+          "rest_b", "rest_a", "n14", "cong", "es5_cong", "rv_sum", "rv_max", "rv_gap",
+          "inel_h4", "gap_log", "es5_inel", "retn", "lastmin", "retn_gap", "tenure", "early", "n_log"] + [f"pos_{p}" for p in POS])
 
 
 def eligible(opp: pd.DataFrame) -> pd.Series:
@@ -58,6 +61,26 @@ def add_state(opp: pd.DataFrame) -> pd.DataFrame:
     st["n"] = g.cumcount() + 1
     st["last1"] = e["_x60"]
     st["last2"] = g["_x60"].shift(1)
+    # return from absence: share of his recent team matches he was unavailable for, and days since he last played
+    ol = o.sort_values(["player_code", "date", "match_id"])
+    inel = (~ol["_elig"]).astype(float)
+    a4 = 1 - 0.5 ** (1 / 4.0)
+    ew = inel.groupby(ol["player_code"]).transform(lambda s: s.ewm(alpha=a4, adjust=False).mean())
+    o["inel_after"] = ew.reindex(o.index)
+    o["inel_pre"] = ew.groupby(ol["player_code"]).shift(1).fillna(0.0).reindex(o.index)
+    lp = ol["date"].where(ol["minutes"] > 0).groupby(ol["player_code"]).ffill()
+    o["lastplay_after"] = lp.reindex(o.index)
+    o["lastplay_pre"] = lp.groupby(ol["player_code"]).shift(1).reindex(o.index)
+    # first matches back after a long break (21+ days without playing): appearances since, and the last appearance's length
+    app = (ol["minutes"] > 0)
+    brk = app & ((pd.to_datetime(ol["date"], utc=True) - pd.to_datetime(o["lastplay_pre"].reindex(ol.index), utc=True)).dt.days >= 21)
+    seg = brk.groupby(ol["player_code"]).cumsum()
+    rn = app.astype(float).groupby([ol["player_code"], seg]).cumsum()
+    o["retn_after"] = rn.reindex(o.index)
+    o["retn_pre"] = rn.groupby(ol["player_code"]).shift(1).fillna(6.0).reindex(o.index)
+    lm = ol["minutes"].where(app).groupby(ol["player_code"]).ffill()
+    o["lastmin_after"] = (lm / 90.0).reindex(o.index)
+    o["lastmin_pre"] = (lm / 90.0).groupby(ol["player_code"]).shift(1).reindex(o.index)
     # tenure: consecutive eligible rows at the current team
     chg = (e["team"] != g["team"].shift(1)).astype(int)
     run = chg.groupby(e["player_code"]).cumsum()
@@ -70,8 +93,15 @@ def add_state(opp: pd.DataFrame) -> pd.DataFrame:
     return o
 
 
-def features_from_state(state: pd.DataFrame, position: pd.Series, early: pd.Series, prior60: dict) -> pd.DataFrame:
-    """state: frame with the *_after columns of the previous available match (NaN if none)."""
+def gap_feature(date: pd.Series, last_play: pd.Series) -> pd.Series:
+    days = (pd.to_datetime(date, utc=True) - pd.to_datetime(last_play, utc=True)).dt.total_seconds() / 86400.0
+    return np.log1p(days.clip(0, 120).fillna(90.0)) / np.log(121.0)
+
+
+def features_from_state(state: pd.DataFrame, position: pd.Series, early: pd.Series, prior60: dict,
+                        extra: pd.DataFrame | None = None) -> pd.DataFrame:
+    """state: frame with the *_after columns of the previous available match (NaN if none).
+    extra: per-row fixture / squad context (rest_b, rest_a, n14, elo_d, is_home, rv_sum, rv_max, inel_h4, gap_log)."""
     f = pd.DataFrame(index=state.index)
     pos = position.reindex(state.index)
     p60 = pos.map(prior60).fillna(0.3)
@@ -94,6 +124,16 @@ def features_from_state(state: pd.DataFrame, position: pd.Series, early: pd.Seri
     f["last2"] = state["last2_after"].fillna(p60)
     f["e60_h5_c"] = f["conf"] * (f["e60_h5"] - p60)
     f["e60_h12_c"] = f["conf"] * (f["e60_h12"] - p60)
+    ex = extra if extra is not None else pd.DataFrame(index=state.index)
+    dflt = {"rest_b": 6.0, "rest_a": 6.0, "n14": 2.0, "elo_d": 0.0, "is_home": 0.5, "rv_sum": 0.0, "rv_max": 0.0,
+            "inel_h4": 0.0, "gap_log": 0.2, "retn": 1.0, "lastmin": 0.8}
+    for k, v in dflt.items():
+        f[k] = ex[k].reindex(state.index).fillna(v) if k in ex else v
+    f["cong"] = (f["rest_a"] < 4).astype(float) + (f["rest_b"] < 4).astype(float) + (f["n14"] >= 4).astype(float)
+    f["es5_cong"] = f["es_h5"] * f["cong"]
+    f["rv_gap"] = f["es_h5"] - f["rv_max"]
+    f["es5_inel"] = f["es_h5"] * f["inel_h4"]
+    f["retn_gap"] = (1.0 - f["retn"]) * f["es_h12"]
     f["tenure"] = np.minimum(state["tenure_after"].fillna(0), 10) / 10.0
     f["early"] = early.reindex(state.index).fillna(0).astype(float)
     f["n_log"] = np.log1p(n)
@@ -107,7 +147,13 @@ def training_frame(o: pd.DataFrame, prior60: dict) -> tuple[pd.DataFrame, pd.Ser
     prev = o.groupby("player_code", sort=False)[[c for c in o.columns if c.endswith("_after")]].shift(1)
     # previous *eligible* state is carried by ffill already; shifting by one row keeps it strictly past
     early = (o["season_match_no"] <= 4).astype(float)
-    X = features_from_state(prev, o["position"], early, prior60)
+    ex = pd.DataFrame({"rest_b": o["rest_b"], "rest_a": o["rest_a"], "n14": o["n14"], "elo_d": o["elo_d"], "is_home": o["is_home"],
+                       "retn": np.minimum(o["retn_pre"], 6.0) / 6.0, "lastmin": o["lastmin_pre"],
+                       "inel_h4": o["inel_pre"], "gap_log": gap_feature(o["date"], o["lastplay_pre"])}, index=o.index)
+    X0 = features_from_state(prev, o["position"], early, prior60, ex)
+    rv = rival_features(X0["es_h5"], o[["match_id", "team", "position"]])
+    ex["rv_sum"], ex["rv_max"] = rv["rv_sum"], rv["rv_max"]
+    X = features_from_state(prev, o["position"], early, prior60, ex)
     y = np.where(o["minutes"] <= 0, 0, np.where(o["started"] >= 1, 2, 1))     # 0 unused, 1 sub, 2 start
     return X, pd.Series(y, index=o.index)
 
@@ -123,7 +169,12 @@ class MinutesModel:
         d = o[(o["date"] < asof) & o["status"].notna() & o["_elig"] & (o["start_known"].astype(bool) | (o["minutes"] <= 0))]
         X, y = training_frame(o.loc[d.index], pri)
         # a transfer-window mover's old history is less informative; the tenure feature handles it
-        lr = LogisticRegression(C=C, max_iter=400)
+        import os
+        if os.environ.get("MINUTES_MODEL", "hgb") == "hgb":
+            from sklearn.ensemble import HistGradientBoostingClassifier
+            lr = HistGradientBoostingClassifier(max_depth=3, learning_rate=0.06, max_iter=150, l2_regularization=2.0, min_samples_leaf=60, random_state=0)
+        else:
+            lr = LogisticRegression(C=C, max_iter=400)
         lr.fit(X.to_numpy(), y.to_numpy())
         return cls(lr, pri)
 
@@ -141,7 +192,7 @@ def latest_state(o: pd.DataFrame, asof: pd.Timestamp) -> pd.DataFrame:
     return last[[c for c in o.columns if c.endswith("_after")]]
 
 
-NORM_STRENGTH = 0.5      # 0 = trust each player's own probabilities, 1 = force the team totals (backtested: 0.5)
+NORM_STRENGTH = 0.75      # 0 = trust each player's own probabilities, 1 = force the team totals (backtested: 0.5)
 
 
 def normalise_team(df: pd.DataFrame, target60: float, targetplay: float, key=("match_id", "team"), strength: float = NORM_STRENGTH) -> pd.DataFrame:

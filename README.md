@@ -32,5 +32,14 @@ tenure. Starts come from FPL's own `starts` count per gameweek (2025/26 on; earl
 60+"). Minutes are then conditional: a starter reaches 60 with probability `q60s` and plays `m60` minutes, an early
 hook plays `m_hook`, a substitute plays `m_sub` (all decayed per-player averages shrunk to the position).
 Expected minutes = P(start)·minutes-if-start + P(sub)·minutes-if-sub, which also feeds the 60+ and short-appearance
-points. Team totals are blended halfway towards a normal match (`NORM_STRENGTH = 0.5`), which backtests best on
-minutes (MAE 12.5 → 12.3, bias -0.2 → +0.1) with points error unchanged. The Lineups tab shows all of it.
+points. Team totals are blended three-quarters of the way towards a normal match (`NORM_STRENGTH = 0.75`).
+
+The start / sub / unused model is a small gradient-boosted classifier (`MINUTES_MODEL=lr` switches to logistic
+regression) fed with: his own recent starts and appearances at three memory lengths; **club rest** (days since and
+until the club's next match in any competition, from the full calendar including European and cup fixtures, and
+matches in the last 14 days); **competition for the place** (starting rates of available teammates in his position);
+and **return from absence** (share of recent matches unavailable, days since he last played, appearances since a
+21+ day break, length of his last appearance). It is evaluated walk-forward, and the per-fixture probabilities are
+computed for each player in each target fixture (`Context._minutes_fx`). Backtest (15 gameweeks, 12.5k player-weeks):
+minutes MAE 12.5 → 11.4, RMSE 20.9 → 20.3, bias about 0, points MAE 0.989 → 0.969. Most of the gain comes from the
+return-from-absence features, then competition for places and rest. A rating-gap (Elo) feature added nothing.

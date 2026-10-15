@@ -63,6 +63,7 @@ class Season:
     pgw: pd.DataFrame              # per-gameweek player stats (event_points, bonus, ...)
     snapshot: pd.DataFrame         # latest playerstats snapshot (status/news/ep_next)
     team_hist: pd.DataFrame = field(default_factory=pd.DataFrame)   # player_code, gw, team_code (registration)
+    calendar: pd.DataFrame = field(default_factory=pd.DataFrame)    # team, date: every match a PL club plays, all competitions
     notes: list[str] = field(default_factory=list)
 
 
@@ -237,7 +238,25 @@ def load_season(src: str | Path, season: str) -> Season:
         base = pl[["player_code", "team_code"]].dropna()
         th = pd.concat([base.assign(gw=g) for g in gws], ignore_index=True)
     th["team_code"] = th["team_code"].astype(int)
-    return Season(season, pl, teams.assign(code=teams["code"].astype(int)), m, p, g, snapshot, th, notes)
+    # ---- club calendar across every competition (rest days and rotation risk)
+    rows = [m[["home_code", "kickoff_time"]].rename(columns={"home_code": "team", "kickoff_time": "date"}),
+            m[["away_code", "kickoff_time"]].rename(columns={"away_code": "team", "kickoff_time": "date"})]
+    if not nested:
+        tdir = d / "By Tournament"
+        for sub in sorted(tdir.iterdir()) if tdir.exists() else []:
+            if sub.name in ("Premier League", "Friendlies", "Community Shield", "Uefa Super Cup") or not sub.is_dir():
+                continue
+            om = _read_gw_folder(str(sub / "GW*" / "matches.csv"))
+            if om.empty or "kickoff_time" not in om:
+                continue
+            for side in ("home_team", "away_team"):
+                v = pd.to_numeric(om[side], errors="coerce")
+                c = v.where(v.isin(list(codes))) if space == "code" else v.map(lambda x: tid2code.get(int(x)) if pd.notna(x) and int(x) in tid2code else np.nan)
+                rows.append(pd.DataFrame({"team": c, "date": pd.to_datetime(om["kickoff_time"], utc=True, errors="coerce")}))
+    cal = pd.concat(rows, ignore_index=True).dropna()
+    cal["team"] = cal["team"].astype(int)
+    cal = cal.drop_duplicates().sort_values(["team", "date"]).reset_index(drop=True)
+    return Season(season, pl, teams.assign(code=teams["code"].astype(int)), m, p, g, snapshot, th, calendar=cal, notes=notes)
 
 
 def load_all(src: str | Path, seasons: list[str] | None = None) -> dict[str, Season]:

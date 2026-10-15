@@ -49,6 +49,9 @@ def build_team_matches(seasons: dict[str, Season]) -> pd.DataFrame:
                 "sot": m[f"{side}_shots_on_target"], "sot_against": m[f"{other}_shots_on_target"],
                 "shots": m[f"{side}_total_shots"], "shots_against": m[f"{other}_total_shots"],
                 "cbit": m[f"{side}_cbit"], "cbit_against": m[f"{other}_cbit"],
+                "elo_t": pd.to_numeric(m.get(f"{side}_team_elo"), errors="coerce") if f"{side}_team_elo" in m else np.nan,
+                "elo_d": ((pd.to_numeric(m.get(f"{side}_team_elo"), errors="coerce") - pd.to_numeric(m.get(f"{other}_team_elo"), errors="coerce")) / 400.0
+                          if f"{side}_team_elo" in m else np.nan),
             }))
     tm = pd.concat(rows, ignore_index=True)
     tm = tm.sort_values(["date", "match_id", "is_home"]).reset_index(drop=True)
