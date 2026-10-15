@@ -30,7 +30,7 @@ def walk_forward(ctx: Context, params: Params, rules: Rules, plan: list[tuple[st
         # who is registered to which team this gameweek, and their pre-match status
         reg = s.team_hist[s.team_hist["gw"] == gw].set_index("player_code")["team_code"]
         # status rows are post-gameweek snapshots: what is known before GW g is row g-1
-        st = ctx.status[(ctx.status["season"] == season) & (ctx.status["gw"] == gw - 1)][["player_code", "status", "chance", "news"]]
+        st = ctx.status[(ctx.status["season"] == season) & (ctx.status["gw"] == gw - 1)][["player_code", "status", "chance", "news", "penalties_order"]]
         gws = list(range(gw, gw + horizon))
         am = AvailabilityModel.fit(ctx.status, si * 100 + gw - 1)
         d = ctx.predict(asof, season, gws, params, rules, st, bonus, team_now=reg, avail_model=am)

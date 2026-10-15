@@ -21,6 +21,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 from fplmodel.config import BUDGET, CURRENT_SEASON, HORIZON_GWS, SQUAD, Params  # noqa: E402
 from fplmodel.data import current_gw  # noqa: E402
+from fplmodel.penalties import team_summary
 from fplmodel.engine import Context  # noqa: E402
 from fplmodel.export import encrypt_json
 from fplmodel.myteam import build_team  # noqa: E402
@@ -63,7 +64,7 @@ def main() -> None:
     # roster, status and news: live API if reachable, otherwise last data snapshot (post-GW row gw0-1)
     players = s.players.set_index("player_code")
     team_now = players["team_code"].astype(int)
-    st = ctx.status[(ctx.status["season"] == CURRENT_SEASON) & (ctx.status["gw"] == gw0 - 1)][["player_code", "status", "chance", "news"]]
+    st = ctx.status[(ctx.status["season"] == CURRENT_SEASON) & (ctx.status["gw"] == gw0 - 1)][["player_code", "status", "chance", "news", "penalties_order"]]
     # price (GBP m) and ownership (%): latest snapshot row per player in the data repo (keyed id -> player_code)
     price, own = pd.Series(dtype=float), pd.Series(dtype=float)
     try:
@@ -80,7 +81,8 @@ def main() -> None:
         el = pd.DataFrame(bs["elements"])
         tcode = {t["id"]: t["code"] for t in bs["teams"]}
         st = pd.DataFrame({"player_code": el["code"], "status": el["status"],
-                           "chance": el["chance_of_playing_next_round"], "news": el["news"]})
+                           "chance": el["chance_of_playing_next_round"], "news": el["news"],
+                           "penalties_order": el["penalties_order"] if "penalties_order" in el else np.nan})
         tn = el.set_index("code")["team"].map(tcode)
         team_now = tn.where(tn.notna(), team_now.reindex(tn.index)).dropna().astype(int)
         price = (el.set_index("code")["now_cost"] / 10.0)
@@ -116,6 +118,20 @@ def main() -> None:
                 teams_out.append({"id": int(t["id"]), "label": t.get("label", str(t["id"])), "error": str(e)[:160]})
                 notes.append(f"Could not load team {t['id']} on this run.")
     owned = {x['code'] for t in teams_out for x in t.get('squad', [])}
+    # penalty takers: evidence-weighted shares per club, and the expected penalties each player takes over the horizon
+    tw, pen_rate, pen_league, pen_conv = ctx.last_pen
+    pen_exp = d.groupby("player_code")["lam_pen"].sum() if "lam_pen" in d else pd.Series(dtype=float)
+    pens = team_summary(tw, players["web_name"], pen_rate)
+    short = s.teams.set_index("code")["short_name"]
+    for t in pens:
+        t["team"] = str(short.get(t["team"], t["team"]))
+    flagged = [t for t in pens if t["status"] in ("conflict",) or any(x["mover"] for x in t["takers"])]
+    for t in flagged:
+        if t["status"] == "conflict":
+            notes.append(f"Penalty watch: {t['team']} - FPL's first-choice taker differs from who has taken the club's recent penalties.")
+        for x in t["takers"]:
+            if x["mover"]:
+                notes.append(f"Penalty watch: {x['name']} ({t['team']}) took {x['prev']} penalties for a previous club; role at the new club unconfirmed.")
     # ---- assemble output
     teams = s.teams.set_index("code")
     hist = ctx.opp[ctx.opp["minutes"] > 0].groupby("player_code").size()
@@ -141,6 +157,10 @@ def main() -> None:
             "sd": round(float(grp["ep_sd"].iloc[0]), 2) if pd.notna(grp["ep_sd"].iloc[0]) else None,
             "low_history": bool(hist.get(pc, 0) < 5),
         }
+        if pc in tw.index and (tw.loc[pc, "pen_share"] >= 0.1 or tw.loc[pc, "pen_n_club"] > 0):
+            r_ = tw.loc[pc]
+            row["pen"] = {"share": round(float(r_["pen_share"]), 2), "taken": int(r_["pen_n_club"]), "fpl": None if pd.isna(r_["fpl_order"]) else int(r_["fpl_order"]),
+                         "exp": round(float(pen_exp.get(pc, 0.0)), 2), "mover": bool(r_["mover"])}
         row["total"] = round(float(sum(row["ep"])), 2)
         if row["total"] >= 0.05 or int(pc) in owned:
             out_players.append(row)
@@ -156,7 +176,7 @@ def main() -> None:
         "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "season": CURRENT_SEASON, "current_gw": int(gw0), "horizon": gws, "model_version": params.version,
         "gw_dates": {int(gw): str(s.matches.loc[s.matches["gameweek"] == gw, "kickoff_time"].min()) for gw in gws},
-        "notes": notes, "players": out_players,
+        "notes": notes, "penalties": pens, "players": out_players,
     }
     out = Path(a.out); out.mkdir(parents=True, exist_ok=True)
     if a.no_encrypt:

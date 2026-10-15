@@ -17,6 +17,7 @@ import pandas as pd
 
 from .config import Params
 from .data import Season
+from .penalties import PEN_XG, add_pen_columns
 
 EVENT_COLS = ["yellow_cards", "red_cards", "own_goals", "penalties_missed", "penalties_saved", "bonus"]
 STAT_COLS = ["xg", "xa", "goals", "assists", "saves", "dc_actions", "cbit", "xgot", "total_shots", "shots_on_target"]
@@ -35,15 +36,17 @@ def build_opportunities(seasons: dict[str, Season], tm: pd.DataFrame) -> pd.Data
         pos = s.players.set_index("player_code")["position"]
         o["position"] = o["player_code"].map(pos)
 
-        p = s.pms[["player_code", "match_id", "minutes_played"] + [c for c in STAT_COLS if c in s.pms]].copy()
+        pm = add_pen_columns(s.pms)
+        PEN = ["pen_sc", "pen_ms", "pen_taken"]
+        p = pm[["player_code", "match_id", "minutes_played"] + [c for c in STAT_COLS if c in pm] + PEN].copy()
         o = o.merge(p, on=["player_code", "match_id"], how="left")
         o["minutes"] = o["minutes_played"].fillna(0.0)
-        for c in STAT_COLS:
+        for c in STAT_COLS + PEN:
             if c in o:
                 o[c] = o[c].fillna(0.0)
         # players who appear in a match but were not registered to the team that GW are kept via pms
-        extra = s.pms[["player_code", "match_id", "gw", "team_code", "opp_code", "is_home", "kickoff_time",
-                       "minutes_played"] + [c for c in STAT_COLS if c in s.pms]].rename(
+        extra = pm[["player_code", "match_id", "gw", "team_code", "opp_code", "is_home", "kickoff_time",
+                    "minutes_played"] + [c for c in STAT_COLS if c in pm] + PEN].rename(
             columns={"team_code": "team", "opp_code": "opp", "kickoff_time": "date"})
         key = set(zip(o["player_code"], o["match_id"]))
         miss = extra[[(a, b) not in key for a, b in zip(extra["player_code"], extra["match_id"])]].copy()
@@ -82,6 +85,9 @@ def build_opportunities(seasons: dict[str, Season], tm: pd.DataFrame) -> pd.Data
             o["status"], o["chance"], o["news"], o["has_pgw"] = np.nan, np.nan, np.nan, False
             for c in EVENT_COLS:
                 o[c] = np.nan
+        # open-play versions: penalties are modelled separately (penalties.py)
+        o["xg_open"] = (o["xg"] - PEN_XG * o["pen_taken"]).clip(lower=0.0)
+        o["goals_open"] = (o["goals"] - o["pen_sc"]).clip(lower=0.0)
         parts.append(o)
     out = pd.concat(parts, ignore_index=True)
     out = out.drop(columns=["minutes_played"], errors="ignore")
@@ -136,7 +142,7 @@ def player_profiles(opp: pd.DataFrame, asof: pd.Timestamp, params: Params, team_
         prof[name + "_expo"] = merged["d"]
 
     mean_Txg = float(a["T_xg"].mean()); mean_Tc = float(a["T_cbit"].mean()); mean_Ts = float(a["T_sot_ag"].mean())
-    share("xg_share", "xg", "T_xg", params.hl.xg, mean_Txg)
+    share("xg_share", "xg_open", "T_xg", params.hl.xg, mean_Txg)
     share("xa_share", "xa", "T_xg", params.hl.xa, mean_Txg)
     share("dc_share", "dc_actions", "T_cbit", params.hl.cbit, mean_Tc)
     # shots on target faced -> saves (goalkeepers only)
@@ -151,7 +157,7 @@ def player_profiles(opp: pd.DataFrame, asof: pd.Timestamp, params: Params, team_
     pri["save_ratio"] = pd.Series({"GKP": prior_save})
 
     # finishing and creation: actual vs expected, shrunk to 1
-    for name, act, exp_, hl, c in (("finish", "goals", "xg", params.hl.goals, params.shrink.finishing_xg),
+    for name, act, exp_, hl, c in (("finish", "goals_open", "xg_open", params.hl.goals, params.shrink.finishing_xg),
                                    ("create", "assists", "xa", params.hl.assists, params.shrink.creation_xa)):
         w = W(hl) * played
         g = pd.DataFrame({"player_code": a["player_code"].to_numpy(), "A": a[act].to_numpy() * w,

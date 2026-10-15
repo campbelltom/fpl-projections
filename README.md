@@ -13,3 +13,13 @@ Expected FPL points per player for the next 8 gameweeks, rebuilt from scratch.
 
 ## Teams and transfers
 `config/teams.json` lists the FPL team ids the site offers (add a friend with one line: `{"id": 123456, "label": "Name"}`). Each run reads those squads from the public FPL endpoints (last finished gameweek's picks plus any transfers already made, selling prices from purchase history, bank, estimated free transfers). The Squad tab then shows the best 0-3 transfers and what each is worth: projected gain over the horizon minus 4 points per transfer beyond the free ones. `tests/exact_squad.py --team` checks the planner against an exact MILP (matched in every case tested). Free transfers are an estimate and can be corrected in the page.
+
+## Penalties and bonus points
+
+- `fplmodel/penalties.py`: penalties are modelled apart from open-play goals. A club's penalty rate comes from its own
+  decayed history; the taker share comes from penalties taken *for that club* plus FPL's `penalties_order`. A transfer
+  resets the evidence (the player is flagged as a mover). `scripts/eval_penalties.py` scores the method on real penalties
+  (86 events: actual taker picked first 69% of the time vs 28% for xG shares).
+- `fplmodel/bonus.py`: bonus points come from a per-match simulation of BPS (weights fitted by `scripts/fit_bps.py`
+  into `config/bps_model.json`). Backtest: calibrated overall and slightly better MAE than the old regression, similar RMSE
+  (bonus is noisy). The old regression remains as a fallback if `bps_model.json` is missing.

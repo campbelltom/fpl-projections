@@ -20,6 +20,7 @@ import pandas as pd
 from scipy import stats
 
 from .config import CONFIG_DIR, DC_THRESHOLD, Params
+from .bonus import simulate_bonus
 from .minutes import normalise_team
 from .scoring import Rules
 from .teams import TeamModel
@@ -101,11 +102,28 @@ def expected_points(ctx: pd.DataFrame, prof: pd.DataFrame, avail: pd.DataFrame, 
     m60, mS = d["m60"].to_numpy(), d["mS"].to_numpy()
     m_exp = p60 * m60 + pS * mS
     d["p_play"] = p60 + pS
+    # penalties: designated takers weighted by how much of the match they are expected to be on the pitch
+    if "pen_w" in d:
+        wq = d["pen_w"].fillna(0.0) * (m_exp / 90.0)
+        tot = wq.groupby([d["match_id"], d["team"]]).transform("sum")
+        d["pen_lam_min"] = np.where(tot > 1e-9, d["pen_rate"] * d["pen_w"].fillna(0.0) / np.where(tot > 1e-9, tot, 1.0) / 90.0, 0.0)
     d["p60_eff"] = p60
     d["m_exp"] = m_exp
 
     pt = lambda k: pos.map(lambda p: rules.pts(k, p)).to_numpy(float)  # noqa: E731
     d["_p60"], d["_pS"] = p60, pS
+    # bonus points: simulate each match's BPS race (needs the per-90 rates the components use)
+    pen90 = d["pen_lam_min"].to_numpy() * 90.0 * (float(d["pen_conv"].iloc[0]) if "pen_conv" in d and len(d) else 0.8) if "pen_lam_min" in d else 0.0
+    is_gk = (pos == "GKP").to_numpy()
+    rates = {"g": (d["finish_ratio"] * d["xg_share"] * d["lam_for"]).to_numpy() + pen90,
+             "a": (d["create_ratio"] * d["xa_share"] * d["lam_for"]).to_numpy(),
+             "sv": np.where(is_gk, (d["save_ratio"] * d["sot_ag"]).to_numpy(), 0.0),
+             "yc": d["yc90"].to_numpy(), "rc": d["rc90"].to_numpy(), "og": d["og90"].to_numpy(),
+             "pm": np.zeros(len(d)), "ps": d["ps90"].to_numpy(), "dc": (d["dc_share"] * d["t_cbit"]).to_numpy(),
+             "ag": d["lam_ag"].to_numpy()}
+    sim = simulate_bonus(d.reset_index(drop=True), rates, p60.to_numpy(), pS.to_numpy())
+    if sim is not None:
+        d["bonus_sim"], d["bonus_sim60"] = sim
     comp = _components(d, pt, rules, params, bonus, p60, pS)
     cond = _components(d, pt, rules, params, bonus, pd.Series(1.0, index=d.index), pd.Series(0.0, index=d.index))
     d["ep_cond60"] = cond.drop(columns=[c for c in cond.columns if c.startswith("_")]).sum(axis=1)
@@ -130,6 +148,12 @@ def _components(d: pd.DataFrame, pt, rules: Rules, params: Params, bonus: BonusM
     m_exp = (p60 * m60 + pS * mS).to_numpy()
     lam_g = (d["finish_ratio"] * d["xg_share"] * d["lam_for"]).to_numpy() * m_exp / 90.0
     lam_a = (d["create_ratio"] * d["xa_share"] * d["lam_for"]).to_numpy() * m_exp / 90.0
+    if "pen_lam_min" in d:
+        conv = float(d["pen_conv"].iloc[0]) if "pen_conv" in d and len(d) else 0.8
+        lam_pen = d["pen_lam_min"].to_numpy() * m_exp          # penalties he is expected to take
+    else:
+        conv, lam_pen = 0.8, np.zeros(len(d))
+    lam_g = lam_g + lam_pen * conv                          # open play + converted penalties
     p_cs = (p60 * np.exp(-d["lam_ag"] * m60 / 90.0)).to_numpy()
     e_gc = (p60.to_numpy() * e_floor_div(d["lam_ag"].to_numpy() * m60 / 90.0, 2) +
             pS.to_numpy() * e_floor_div(d["lam_ag"].to_numpy() * mS / 90.0, 2))
@@ -151,11 +175,16 @@ def _components(d: pd.DataFrame, pt, rules: Rules, params: Params, bonus: BonusM
     c["saves"] = e_sv * rules.pts("saves", "GKP")
     c["defensive"] = p_dc * pt("defensive_contribution")
     c["cards"] = (d["yc90"] * rules.pts("yellow_cards", "MID") + d["rc90"] * rules.pts("red_cards", "MID")) * m_exp / 90.0
-    c["other"] = (d["og90"] * rules.pts("own_goals", "MID") + d["pm90"] * rules.pts("penalties_missed", "MID") +
-                  d["ps90"] * rules.pts("penalties_saved", "GKP")) * m_exp / 90.0
+    pen_miss = (lam_pen * (1.0 - conv) * rules.pts("penalties_missed", "MID")) if "pen_lam_min" in d else (d["pm90"] * rules.pts("penalties_missed", "MID") * m_exp / 90.0)
+    c["other"] = (d["og90"] * rules.pts("own_goals", "MID") + d["ps90"] * rules.pts("penalties_saved", "GKP")) * m_exp / 90.0 + pen_miss
+    c["_lam_pen"] = lam_pen
+    use_sim = "bonus_sim" in d
     bon_in = pd.DataFrame({"position": pos.to_numpy(), "lam_g": lam_g, "lam_a": lam_a, "p_cs": p_cs, "e_saves": e_saves,
                            "p60": p60.to_numpy()}, index=d.index)
-    c["bonus"] = bonus.predict(bon_in) * rules.pts("bonus", "MID")
+    if use_sim:
+        c["bonus"] = (d["bonus_sim60"] if bool((p60.to_numpy() == 1).all()) else d["bonus_sim"]).to_numpy() * rules.pts("bonus", "MID")
+    else:
+        c["bonus"] = bonus.predict(bon_in) * rules.pts("bonus", "MID")
     c["_lam_g"], c["_lam_a"], c["_p_cs"], c["_p_dc"], c["_e_saves"], c["_m_exp"] = lam_g, lam_a, p_cs, p_dc, e_saves, m_exp
     c["_e_gc"], c["_p_play"] = e_gc, (p60 + pS).to_numpy()
     return c

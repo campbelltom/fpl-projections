@@ -247,6 +247,16 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
 .wt tr.bestw{background:color-mix(in srgb,var(--warn) 22%,transparent)}
 .wt u{text-decoration:none;font:700 .5rem var(--num);background:var(--warn);color:#000;border-radius:3px;padding:1px 3px;margin-left:3px}
 .wc details summary{cursor:pointer;font:600 .85rem var(--num);padding:6px 0}
+.info.pen{margin-top:6px;color:var(--ink)}
+.pc{background:var(--card);border-radius:14px;padding:9px 12px 8px;margin-bottom:6px}
+.ph2{display:flex;align-items:center;gap:8px;margin-bottom:4px}.ph2 b{font:700 1rem var(--num)}
+.ph2 .pr{margin-left:auto;font:500 .7rem var(--num);color:var(--ink2)}
+.ps{font:700 .6rem var(--num);padding:2px 6px;border-radius:5px;border:1px solid currentColor}.ps.ok{color:var(--good,#2a9d5c)}.ps.warn{color:var(--warn)}.ps.bad{color:var(--bad)}
+.tk{display:grid;grid-template-columns:minmax(0,1fr) 70px 34px;gap:2px 8px;align-items:center;padding:2px 0}
+.tk .tn{font:600 .85rem var(--num);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.tk .tn em{font:700 .55rem var(--num);font-style:normal;color:var(--warn);margin-left:5px}
+.tk .tbar{height:6px;border-radius:3px;background:var(--card2);overflow:hidden}.tk .tbar span{display:block;height:100%;background:var(--ink)}
+.tk b{font:700 .8rem var(--num);text-align:right}.tk small{grid-column:1/-1;font:500 .66rem var(--num);color:var(--ink2);margin-top:-2px}
+.pc p{font-size:.76rem;color:var(--ink2);margin:4px 0 0}
 .tohd{margin:12px 2px 6px}.tohd b{display:block;font:700 1rem var(--num)}.tohd span{font-size:.78rem;color:var(--ink2)}
 .to{background:var(--card);border-radius:14px;margin-bottom:5px;overflow:hidden;border-left:4px solid var(--p)}
 .to .tr{all:unset;box-sizing:border-box;cursor:pointer;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center;width:100%;padding:8px 10px}
@@ -303,12 +313,13 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
       <button class="ic" id="lockbtn" type="button" aria-label="Lock"><svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg></button>
     </div>
     <div class="sub" id="meta"></div>
-    <div class="views sort wide" id="views" role="group" aria-label="View"><button type="button" data-v="players" aria-pressed="true">Players</button><button type="button" data-v="squad" aria-pressed="false">Squad</button></div>
+    <div class="views sort wide" id="views" role="group" aria-label="View"><button type="button" data-v="players" aria-pressed="true">Players</button><button type="button" data-v="squad" aria-pressed="false">Squad</button><button type="button" data-v="pens" aria-pressed="false">Penalties</button></div>
     <div id="pctl"><input class="search" id="q" type="search" placeholder="Search players" aria-label="Search players">
     <div class="bar2"><span id="count"></span><span class="sp"></span>
       <div class="sort" role="group" aria-label="Sort by"><button id="s-total" type="button"></button><button id="s-next" type="button"></button><button id="s-value" type="button">Value</button></div></div></div>
   </div></header>
   <div class="wrap"><div id="list"></div>
+    <section id="pensview" hidden></section>
     <section id="squadview" hidden>
       <div class="sqctl">
         <label class="wide">Start from<select id="sq-team" aria-label="Start from"></select></label>
@@ -421,7 +432,7 @@ function start(d){
   for(const id of ['#pmin','#pmax']){ const e=$(id); e.min=state.lo; e.max=state.hi; }
   $('#pmin').value = state.pmin; $('#pmax').value = state.pmax; syncPrice();
   $('#s-next').textContent = 'GW ' + g0;
-  const n = d.notes.length ? d.notes.map(x=>`<p>${esc(x)}</p>`).join('') : '';
+  const nn = d.notes.filter(x=>!x.startsWith('Penalty watch')); const n = nn.length ? nn.map(x=>`<p>${esc(x)}</p>`).join('') : '';
   $('#foot').innerHTML = n + `<p>Expected points under the official FPL scoring, from a team model plus a per-player model. Players with fewer than five league appearances are marked new: treat their numbers as rough. Model ${esc(d.model_version)}.</p>`;
   render();
 }
@@ -514,7 +525,7 @@ function detail(p){
   const c = comps.map(([k,v]) => `<span>${LABEL[k]}</span><span class="bar"><span class="${v<0?'neg':''}" style="width:${Math.round(Math.abs(v)/m*100)}%"></span></span><span class="t">${v.toFixed(2)}</span>`).join('');
   const g = p.ep.map((e,i) => `<div><div class="g">GW ${d.horizon[i]}</div><div class="e">${f1(e)}</div><div class="o">${p.fx[i]==='BLANK'?'no game':esc(p.fx[i])}</div></div>`).join('');
   return `<div class="detail"><div><h3>Each gameweek</h3><div class="gws">${g}</div>
-    <div class="info">Chance of playing GW ${d.horizon[0]}: ${Math.round(p.p_play[0]*100)}%.${p.sd?` Typical spread: ±${p.sd.toFixed(1)}.`:''}${p.news?' '+esc(p.news):''}</div></div>
+    <div class="info">Chance of playing GW ${d.horizon[0]}: ${Math.round(p.p_play[0]*100)}%.${p.sd?` Typical spread: ±${p.sd.toFixed(1)}.`:''}${p.news?' '+esc(p.news):''}</div>${penInfo(p)}</div>
     <div><h3>Where GW ${d.horizon[0]} points come from</h3><div class="comp">${c}</div></div>
     ${p.price==null?'':`<div class="valbox"><h3>Value over ${state.vbase==='starter'?'the cheapest likely starter':'a minimum-price player'} (${p.pos})</h3>
       <div class="vgrid"><div><b>${sg(p._pa)}</b><span>points over ${state.hz===1?'the gameweek':state.hz+' gameweeks'}</span></div>
@@ -681,6 +692,38 @@ function lineupHTML(sq, hz, ownedSet, ro){
   return {xiPts, tc, bb, cap:topCap, capN:capCount.get(topCap.code)||0, html:`${chips}<div class="gwt"><table><thead>${head}</thead><tbody>${body}</tbody><tfoot>${foot}</tfoot></table></div>
     <p class="sqnote">How each week is chosen: the XI is the best legal eleven by projected points (one goalkeeper, at least 3 defenders, 2 midfielders and 1 forward), the top scorer wears the armband and counts double. The Bench line is what the four substitutes score each week, to compare with the XI total. Shaded cells start, faded cells are on the bench, and the small text is the opponent, with (H) home or (A) away. A boxed cell is the captain. TC and BB mark the best week for each chip, using this squad as it stands. Tap a player for his weekly reasoning, Keep and Swap.</p>`};
 }
+/* ---------- penalties ---------- */
+function penInfo(p){
+  if(!p.pen) return '';
+  const q = p.pen, pct = Math.round(q.share*100);
+  const bits = [`takes about ${pct}% of ${p.team}'s penalties in this model`];
+  if(q.taken) bits.push(`has taken ${q.taken} for the club`); else bits.push('has not taken one for this club');
+  if(q.fpl) bits.push(`FPL lists him ${q.fpl===1?'first':q.fpl===2?'second':'#'+q.fpl} choice`);
+  if(q.mover) bits.push('joined from a club where he took penalties, so his role here is unconfirmed');
+  return `<div class="info pen">Penalties: ${bits.join('; ')}. Expected to take ${q.exp.toFixed(2)} over the horizon.</div>`;
+}
+const PSTAT = {confirmed:['Confirmed','ok'], 'fpl-only':['FPL listing only','warn'], conflict:['Conflict','bad'], unclear:['Unclear','warn']};
+function penEvidence(t){
+  const tk = t.takers, fpl1 = tk.find(x=>x.fpl===1), lead = tk.slice().sort((a,b)=>b.taken-a.taken)[0];
+  if(t.status==='confirmed') return `${esc(tk[0].name)} has taken ${tk[0].taken} of the club's ${t.total} penalties on record and FPL lists him first.`;
+  if(t.status==='conflict') return `FPL lists ${esc(fpl1.name)} first, but ${esc(lead.name)} has taken ${lead.taken} of the club's ${t.total}. The model weighs the evidence, so both carry share.`;
+  if(t.status==='fpl-only') return `No penalty on record for this club${t.total?'':' yet'}. FPL lists ${esc(fpl1.name)} first: treat as unconfirmed until one is taken.`;
+  return 'No first choice listed and no penalties on record. Shares are spread by attacking threat.';
+}
+function renderPens(){
+  const d = state.data, P = (d.penalties||[]).slice();
+  const order = {conflict:0,'fpl-only':1,unclear:2,confirmed:3};
+  P.sort((a,b) => order[a.status]-order[b.status] || b.rate-a.rate);
+  const cards = P.map(t => {
+    const [lab,cls] = PSTAT[t.status] || ['',''];
+    const rows = t.takers.map(x => `<div class="tk"><span class="tn">${esc(x.name)}${x.mover?'<em>MOVED</em>':''}</span>
+      <span class="tbar"><span style="width:${Math.round(x.share*100)}%"></span></span><b>${Math.round(x.share*100)}%</b>
+      <small>${x.taken?`took ${x.taken}${x.last_gw?`, last GW ${x.last_gw}`:''}`:x.mover?`took ${x.prev} elsewhere`:'none taken'}${x.fpl?` · FPL #${x.fpl}`:''}</small></div>`).join('');
+    const mv = t.takers.filter(x=>x.mover).map(x=>`${esc(x.name)} took ${x.prev} penalties for a previous club: unconfirmed here.`).join(' ');
+    return `<div class="pc"><div class="ph2"><b>${esc(t.team)}</b><span class="ps ${cls}">${lab}</span><span class="pr">${t.rate.toFixed(2)} pens/match</span></div>${rows}<p>${penEvidence(t)} ${mv}</p></div>`;
+  }).join('');
+  $('#pensview').innerHTML = `<p class="sqnote">Who takes each club's penalties, from the penalties each player has taken <b>for that club</b> (recent ones count most), FPL's own taker order, and nothing else. A transfer resets the evidence: a taker who has moved is shown as MOVED until he takes one for the new club. Flagged clubs are listed first. In a backtest on 86 real penalties this method named the actual taker first 69% of the time, against 28% for the old shares of team xG.</p>${cards}`;
+}
 const horizonLabel = hz => hz===1 ? 'the next gameweek' : hz+' gameweeks';
 const MEDNOTE = 'A red or amber plus marks a player who is injured, suspended or doubtful: his projection already allows for missed games, but injury news changes fast, so check before acting.';
 function curTeam(){ return state.mine>=0 ? state.data.teams[state.mine] : null; }
@@ -830,9 +873,9 @@ function buildSquad(){
 function setView(v){
   state.view = v;
   document.querySelectorAll('#views button').forEach(x=>x.setAttribute('aria-pressed',x.dataset.v===v));
-  const sqv = v==='squad';
-  $('#pctl').hidden = sqv; $('#list').hidden = sqv; $('#squadview').hidden = !sqv; document.querySelector('.dock').hidden = sqv;
-  if(sqv) renderSquad(); else render();
+  const sqv = v==='squad', pv = v==='pens', other = sqv||pv;
+  $('#pctl').hidden = other; $('#list').hidden = other; $('#squadview').hidden = !sqv; $('#pensview').hidden = !pv; document.querySelector('.dock').hidden = other;
+  if(sqv) renderSquad(); else if(pv) renderPens(); else render();
 }
 window.FPL = {solveSquad, transferOptions, lineupScore, pickGW, state};
 

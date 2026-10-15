@@ -11,6 +11,7 @@ from .availability import AvailabilityModel, HORIZON
 from .config import Params
 from .data import Season, load_all
 from .minutes import MinutesModel, add_state, features_from_state, latest_state
+from .penalties import taker_weights, team_rates, team_summary
 from .players import build_opportunities, player_profiles
 from .predict import BonusModel, aggregate_gameweek, expected_points, fixture_context
 from .scoring import Rules, load_rules
@@ -46,7 +47,7 @@ class Context:
                 keep = ["player_code", "gw", "status", "chance_of_playing_next_round", "news", "event_points", "minutes",
                         "bonus", "ep_next", "ep_this", "total_points", "goals_scored", "assists", "clean_sheets",
                         "goals_conceded", "saves", "yellow_cards", "red_cards", "own_goals", "defensive_contribution",
-                        "penalties_missed", "penalties_saved"]
+                        "penalties_missed", "penalties_saved", "penalties_order"]
                 g = s.pgw[[c for c in keep if c in s.pgw]].copy()
                 g = g.rename(columns={"chance_of_playing_next_round": "chance"})
                 g["season_idx"], g["season"] = si, n
@@ -109,6 +110,16 @@ class Context:
                     for k, v in o.items():
                         if k in prof.columns:
                             prof.loc[pc, k] = v
+
+        # penalties: team rate and the evidence-weighted taker for each club
+        fo = status_now.drop_duplicates("player_code").set_index("player_code").get("penalties_order")
+        fo = pd.Series(dtype=float) if fo is None else pd.to_numeric(fo, errors="coerce")
+        rate, league, conv = team_rates(self.opp, asof, si, idx)
+        tw = taker_weights(self.opp, asof, si, idx, prof["team_code"], fo, prof["xg_share"], params.shrink.prior_season_weight)
+        prof = prof.join(tw[["pen_w", "pen_share", "pen_ev", "pen_n_club", "pen_n_prev", "pen_last_gw", "fpl_order", "mover", "club_matches"]])
+        prof["pen_rate"] = prof["team_code"].map(rate).fillna(league)
+        prof["pen_conv"] = conv
+        self.last_pen = (tw, rate, league, conv)
 
         if fixtures is None:
             f = s.matches[s.matches["gameweek"].isin(target_gws)]
