@@ -206,6 +206,13 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
 .lb.hi i{background:#2a9d5c}.lb.mid i{background:#e0a21a}.lb.lo i{background:#d64545}
 .lr small{font:500 .7rem var(--num);color:var(--ink2);text-align:right}.lm{font:600 .72rem var(--num);color:var(--ink2)}
 .lr .med{position:static;display:inline-grid;width:12px;height:12px;border-radius:6px;vertical-align:-2px;margin-left:4px}.lr .med svg{width:7px;height:7px}
+.rpk{margin-top:8px;background:var(--card);border-radius:12px;padding:8px}
+.rph{display:flex;gap:8px;align-items:center;margin-bottom:6px}.rph input{flex:1;min-width:0;height:36px;border:0;border-radius:10px;background:var(--card2);padding:0 10px;font-size:16px;color:var(--ink)}.rph span{font:600 .72rem var(--num);color:var(--ink2);white-space:nowrap}
+.rpl{max-height:260px;overflow:auto}
+.rp{all:unset;box-sizing:border-box;cursor:pointer;display:grid;grid-template-columns:minmax(0,1fr) 70px 46px 40px;gap:6px;align-items:center;width:100%;min-height:34px;padding:2px 4px;border-top:1px solid var(--line)}
+.rp:focus-visible{outline:3px solid var(--focus)}.rp.no{opacity:.45;cursor:default}
+.rp .rn{font:600 .84rem var(--num);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.rp .rm{font:500 .72rem var(--num);color:var(--ink2)}.rp .rt{font:600 .74rem var(--num);text-align:right}
+.rp b{font:700 .8rem var(--num);text-align:right}.rp b.up{color:#2a9d5c}.rp b.dn{color:#d64545}
 .sqnote{font-size:.78rem;color:var(--ink2);margin:0 2px 10px}
 .gwt{overflow-x:auto;background:var(--card);border-radius:14px;margin-bottom:8px}
 .gwt table{border-collapse:separate;border-spacing:0;width:100%;font-variant-numeric:tabular-nums}
@@ -393,7 +400,7 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
 'use strict';
 const $ = s => document.querySelector(s);
 const POS = ['All','GKP','DEF','MID','FWD'];
-const state = {pos:'All', team:'', q:'', hz:8, avail:true, sort:'total', open:null, pmin:0, pmax:99, lo:0, hi:99, data:null, intro:true, vbase:'starter', view:'players', mine:-1, ft:1, plan:null, sel:null, budget:100, locked:new Set(), banned:new Set(), squad:null, srow:null, opt:null, wc:null, wcg:null, wcv:'fh', lug:0, luo:new Set(), moves:[], optList:[]};
+const state = {pos:'All', team:'', q:'', hz:8, avail:true, sort:'total', open:null, pmin:0, pmax:99, lo:0, hi:99, data:null, intro:true, vbase:'starter', view:'players', mine:-1, ft:1, plan:null, sel:null, budget:100, locked:new Set(), banned:new Set(), squad:null, srow:null, opt:null, wc:null, wcg:null, wcv:'fh', lug:0, luo:new Set(), rep:null, repq:'', moves:[], optList:[]};
 const store = {
   get(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } },
   set(k,v){ try{ localStorage.setItem(k,v); }catch(e){} },
@@ -691,6 +698,21 @@ function medical(p){
   return `<span class="med ${p.status==='d'?'d':''}" title="${t}${p.news?': '+esc(p.news):''}" role="img" aria-label="${t}">${CROSS}</span>`;
 }
 const short = n => { const w = n.split(' '); const l = w[w.length-1]; return l.length>7 ? l.slice(0,6)+'.' : l; };
+function repPicker(p, sq, hz, ownedSet){
+  const d = state.data, T = curTeam(), W = (ownedSet && T) ? workTeam(T) : null;
+  const sell = W ? (W.squad.find(x=>x.code===p.code)||{sell:p.price}).sell : p.price;
+  const room = W ? W.bank + sell : state.budget - (state.squad ? state.squad.spent : 0) + p.price;
+  const inSq = new Set(sq.map(x=>x.code)), cnt = {}; sq.forEach(x => { if(x.code!==p.code) cnt[x.team]=(cnt[x.team]||0)+1; });
+  const E = d.players.map(x => x.ep.slice(0,hz)), idx = new Map(d.players.map((x,k)=>[x.code,k]));
+  const ob = x => ({pos:x.pos, k:idx.get(x.code), p:x}), cur = sq.map(ob), base = lineupScore(cur, E, hz, 0), a = sq.findIndex(x=>x.code===p.code);
+  const q = state.repq.trim().toLowerCase();
+  let c = d.players.filter(x => x.pos===p.pos && x.price!=null && !inSq.has(x.code) && x.status!=='n' && (!q || x.name.toLowerCase().includes(q) || x.team.toLowerCase()===q));
+  c = c.map(x => { const w = cur.slice(); w[a] = ob(x); return {x, gain: lineupScore(w,E,hz,0)-base, ok: x.price <= room+1e-9 && (cnt[x.team]||0) < 3, why: x.price > room+1e-9 ? 'over budget' : (cnt[x.team]||0) >= 3 ? '3 from club' : ''}; });
+  c.sort((u,v) => (v.ok-u.ok) || v.gain-u.gain);
+  const list = c.slice(0, q ? 40 : 25).map(r => `<button type="button" class="rp${r.ok?'':' no'}" data-pick="${r.x.code}" ${r.ok?'':'disabled'}><span class="rn">${esc(r.x.name)}${medical(r.x)}</span><span class="rm">${r.x.team} £${r.x.price.toFixed(1)}</span><span class="rt">${r.ok ? f1(sum(r.x.ep,hz)) : r.why}</span><b class="${r.gain>=0?'up':'dn'}">${r.ok ? (r.gain>=0?'+':'\u2212')+Math.abs(r.gain).toFixed(1) : ''}</b></button>`).join('');
+  return `<div class="rpk"><div class="rph"><input id="rep-q" type="search" placeholder="Search ${p.pos} by name or club" value="${esc(state.repq)}" aria-label="Search replacements" autocomplete="off"><span>Up to £${room.toFixed(1)}m</span></div><div class="rpl">${list||'<div class="empty">No players match.</div>'}</div>
+    <div class="sqnote">Right column is the change in XI points over ${horizonLabel(hz)}; the middle is his total. Greyed players cannot fit the budget or the three-per-club limit.</div></div>`;
+}
 function lineupHTML(sq, hz, ownedSet, ro){
   const d = state.data, G = []; for(let g=0; g<hz; g++) G.push(pickGW(sq, g));
   const order = {GKP:0,DEF:1,MID:2,FWD:3};
@@ -716,7 +738,7 @@ function lineupHTML(sq, hz, ownedSet, ro){
     const why = starts===hz ? `Starts every week.` : starts===0 ? `Never makes the XI over this period.` :
       `Starts ${starts} of ${hz}. Benched when the player he is up against scores more: ` + off.slice(0,4).map(o=>`GW ${d.horizon[o.g]} (${f1(o.e)} vs ${f1(o.cut)})`).join(', ') + (off.length>4?', ...':'') + '.';
     const act = open ? `<tr class="act pos-${p.pos}"><td colspan="${hz+2}"><div class="why">${why} Price £${p.price.toFixed(1)}m${p.own!=null?`, owned by ${p.own.toFixed(1)}%`:''}.</div>
-      <div class="tb"><button type="button" data-lock="${p.code}" aria-pressed="${lk}">${lk?'Kept':'Keep in squad'}</button>${ownedSet ? (isNew?`<button type="button" data-undo="${p.code}">Undo this transfer</button>`:'') : `<button type="button" data-ban="${p.code}">Swap out</button>`}</div></td></tr>` : '';
+      <div class="tb"><button type="button" data-lock="${p.code}" aria-pressed="${lk}">${lk?'Kept':'Keep in squad'}</button><button type="button" data-rep="${p.code}" aria-pressed="${state.rep===p.code}">Replace</button>${ownedSet ? (isNew?`<button type="button" data-undo="${p.code}">Undo this transfer</button>`:'') : `<button type="button" data-ban="${p.code}">Swap out</button>`}</div>${state.rep===p.code?repPicker(p, sq, hz, ownedSet):''}</td></tr>` : '';
     return `<tr class="pr pos-${p.pos}"><th class="nm" scope="row">${ro?'<span class="rb">':`<button type="button" data-srow="${p.code}" aria-expanded="${open}">`}${medical(p)}<span class="n1">${esc(short(p.name))}${isNew?'<em>NEW</em>':''}${lk?'<em>KEPT</em>':''}</span><span class="n2">${p.pos} ${p.team} £${p.price.toFixed(1)}</span>${ro?'</span>':'</button>'}</th>${cells}<td class="tt"><b>${f1(pts)}</b></td></tr>${act}`;
   }).join('');
   const foot = `<tr class="ft"><th class="nm">XI total</th>${G.map(x=>`<td><b>${f1(x.pts)}</b></td>`).join('')}<td class="tt"><b>${f1(xiPts)}</b></td></tr>
@@ -955,6 +977,17 @@ function wcHTML(){
     <details><summary>Wildcard squad</summary>${L.html}</details>
     <button type="button" class="do" id="wc-run">Run again</button></div>`;
 }
+function pickReplacement(inn){
+  const o = state.rep; if(o==null) return;
+  if(curTeam()){ state.moves.push({o, i:inn}); state.opt=null; }
+  else if(state.squad){
+    const by = new Map(state.data.players.map(p=>[p.code,p])), np = by.get(inn);
+    state.squad.squad = state.squad.squad.map(p => p.code===o ? np : p);
+    state.squad.spent = Math.round(state.squad.squad.reduce((t,p)=>t+p.price,0)*10)/10;
+    state.locked.delete(o); state.locked.add(inn);
+  }
+  state.rep = null; state.repq = ''; state.srow = inn; renderSquad();
+}
 function buildSquad(){
   const hz = +$('#sq-hz').value || state.data.horizon.length;
   $('#sqout').innerHTML = '<div class="empty">Building...</div>';
@@ -988,7 +1021,9 @@ document.addEventListener('click', ev => {
   else if(b.id==='s-next'){ state.sort='next'; render(); }
   else if(b.dataset.vb){ state.vbase=b.dataset.vb; document.querySelectorAll('#vb button').forEach(x=>x.setAttribute('aria-pressed',x===b)); render(); }
   else if(b.dataset.v){ setView(b.dataset.v); }
-  else if(b.dataset.srow){ const c=+b.dataset.srow; state.srow = state.srow===c?null:c; renderSquad(); }
+  else if(b.dataset.srow){ const c=+b.dataset.srow; state.srow = state.srow===c?null:c; state.rep=null; state.repq=''; renderSquad(); }
+  else if(b.dataset.rep){ const c=+b.dataset.rep; state.rep = state.rep===c?null:c; state.repq=''; renderSquad(); }
+  else if(b.dataset.pick){ pickReplacement(+b.dataset.pick); }
   else if(b.dataset.lock){ const c=+b.dataset.lock; state.locked.has(c)?state.locked.delete(c):state.locked.add(c); renderSquad(); }
   else if(b.dataset.ban){ const c=+b.dataset.ban; state.banned.add(c); state.locked.delete(c); buildSquad(); }
   else if(b.id==='wc-run'){ runWild(); }
@@ -1016,6 +1051,7 @@ document.addEventListener('input', ev => {
   if(t.id==='q'){ state.q=t.value.trim().toLowerCase(); render(); }
   else if(t.id==='team'){ state.team=t.value; render(); }
   else if(t.id==='hz'){ state.hz=+t.value; render(); }
+  else if(t.id==='rep-q'){ state.repq=t.value; const pos=t.selectionStart; renderSquad(); const n=$('#rep-q'); if(n){ n.focus(); n.setSelectionRange(pos,pos); } }
   else if(t.id==='lu-gw'){ state.lug=+t.value; renderLineups(); }
   else if(t.id==='sq-team'){ state.mine=+t.value; const T=curTeam(); if(T&&T.ft!=null) state.ft=T.ft; state.squad=null; state.opt=null; state.moves=[]; state.srow=null; renderSquad(); }
   else if(t.id==='sq-hz'){ state.squad=null; state.opt=null; renderSquad(); }
