@@ -229,6 +229,12 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
 .gwt th.bbw u:last-child{background:var(--good,#2a9d5c);color:#fff}
 .gwt th.tcw.bbw u:first-child{background:var(--warn);color:#000}
 .gwt .c.cap.tcc{background:var(--warn);color:#000}.gwt .c.cap.tcc i{color:#000}
+.gwt tfoot td.bbc{color:var(--good,#2a9d5c);font-weight:700}
+.od .do{margin-top:8px;height:36px;padding:0 14px;border:0;border-radius:10px;background:var(--ink);color:var(--bg);font:600 .82rem var(--num)}
+.wi{background:var(--card);border-radius:14px;padding:10px 12px;margin-bottom:8px;border-left:4px solid var(--good,#2a9d5c);display:grid;gap:6px}
+.wi span{font-size:.78rem;color:var(--ink2)}
+.wi .wn{display:flex;gap:14px}.wi .wn b{font:700 1.05rem var(--num)}
+.wi button{justify-self:start;height:32px;padding:0 12px;border:0;border-radius:9px;background:var(--card2);font:600 .78rem var(--num);color:var(--ink)}
 .tohd{margin:12px 2px 6px}.tohd b{display:block;font:700 1rem var(--num)}.tohd span{font-size:.78rem;color:var(--ink2)}
 .to{background:var(--card);border-radius:14px;margin-bottom:5px;overflow:hidden;border-left:4px solid var(--p)}
 .to .tr{all:unset;box-sizing:border-box;cursor:pointer;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center;width:100%;padding:8px 10px}
@@ -329,7 +335,7 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
 'use strict';
 const $ = s => document.querySelector(s);
 const POS = ['All','GKP','DEF','MID','FWD'];
-const state = {pos:'All', team:'', q:'', hz:8, avail:true, sort:'total', open:null, pmin:0, pmax:99, lo:0, hi:99, data:null, intro:true, vbase:'starter', view:'players', mine:-1, ft:1, plan:null, sel:null, budget:100, locked:new Set(), banned:new Set(), squad:null, srow:null, opt:null};
+const state = {pos:'All', team:'', q:'', hz:8, avail:true, sort:'total', open:null, pmin:0, pmax:99, lo:0, hi:99, data:null, intro:true, vbase:'starter', view:'players', mine:-1, ft:1, plan:null, sel:null, budget:100, locked:new Set(), banned:new Set(), squad:null, srow:null, opt:null, moves:[], optList:[]};
 const store = {
   get(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } },
   set(k,v){ try{ localStorage.setItem(k,v); }catch(e){} },
@@ -636,8 +642,9 @@ function lineupHTML(sq, hz, ownedSet){
   const xiPts = G.reduce((t,x)=>t+x.pts,0);
   // chips: triple captain adds one more copy of the captain; bench boost adds the four bench players
   let tc = {g:0,gain:-1}, bb = {g:0,gain:-1};
+  const benchW = [];
   G.forEach((x,g) => { const tg = x.cap.ep[g]; if(tg>tc.gain) tc = {g, gain:tg, p:x.cap};
-    const bg = sq.filter(p=>!x.xi.has(p.code)).reduce((t,p)=>t+p.ep[g],0); if(bg>bb.gain) bb = {g, gain:bg}; });
+    const bg = sq.filter(p=>!x.xi.has(p.code)).reduce((t,p)=>t+p.ep[g],0); benchW.push(bg); if(bg>bb.gain) bb = {g, gain:bg}; });
   const head = `<tr><th class="nm">Player</th>${G.map((x,g)=>`<th class="${g===tc.g?'tcw ':''}${g===bb.g?'bbw':''}">${d.horizon[g]}${g===tc.g?'<u>TC</u>':''}${g===bb.g?'<u>BB</u>':''}</th>`).join('')}<th class="tt">XI pts</th></tr>`;
   const body = rows.map(p => {
     let starts = 0, pts = 0; const off = [];
@@ -651,16 +658,17 @@ function lineupHTML(sq, hz, ownedSet){
     const why = starts===hz ? `Starts every week.` : starts===0 ? `Never makes the XI over this period.` :
       `Starts ${starts} of ${hz}. Benched when the player he is up against scores more: ` + off.slice(0,4).map(o=>`GW ${d.horizon[o.g]} (${f1(o.e)} vs ${f1(o.cut)})`).join(', ') + (off.length>4?', ...':'') + '.';
     const act = open ? `<tr class="act pos-${p.pos}"><td colspan="${hz+2}"><div class="why">${why} Price £${p.price.toFixed(1)}m${p.own!=null?`, owned by ${p.own.toFixed(1)}%`:''}.</div>
-      <div class="tb"><button type="button" data-lock="${p.code}" aria-pressed="${lk}">${lk?'Kept':'Keep in squad'}</button>${ownedSet&&!isNew?'':`<button type="button" data-ban="${p.code}">Swap out</button>`}</div></td></tr>` : '';
+      <div class="tb"><button type="button" data-lock="${p.code}" aria-pressed="${lk}">${lk?'Kept':'Keep in squad'}</button>${ownedSet ? (isNew?`<button type="button" data-undo="${p.code}">Undo this transfer</button>`:'') : `<button type="button" data-ban="${p.code}">Swap out</button>`}</div></td></tr>` : '';
     return `<tr class="pr pos-${p.pos}"><th class="nm" scope="row"><button type="button" data-srow="${p.code}" aria-expanded="${open}">${medical(p)}<span class="n1">${esc(short(p.name))}${isNew?'<em>NEW</em>':''}${lk?'<em>KEPT</em>':''}</span><span class="n2">${p.pos} ${p.team} £${p.price.toFixed(1)}</span></button></th>${cells}<td class="tt"><b>${f1(pts)}</b></td></tr>${act}`;
   }).join('');
   const foot = `<tr class="ft"><th class="nm">XI total</th>${G.map(x=>`<td><b>${f1(x.pts)}</b></td>`).join('')}<td class="tt"><b>${f1(xiPts)}</b></td></tr>
     <tr class="ft2"><th class="nm">Captain</th>${G.map(x=>`<td title="${esc(x.cap.name)}">${esc(short(x.cap.name).slice(0,5))}</td>`).join('')}<td></td></tr>
-    <tr class="ft2"><th class="nm">Shape</th>${G.map(x=>`<td>${x.shape}</td>`).join('')}<td></td></tr>`;
+    <tr class="ft2"><th class="nm">Shape</th>${G.map(x=>`<td>${x.shape}</td>`).join('')}<td></td></tr>
+    <tr class="ft2"><th class="nm">Bench</th>${benchW.map((v,g)=>`<td${g===bb.g?' class="bbc"':''}>${f1(v)}</td>`).join('')}<td></td></tr>`;
   const chips = `<div class="chips"><div class="cc tcw"><b>Triple captain</b><span>GW ${d.horizon[tc.g]}: ${esc(tc.p.name)}</span><em>+${f1(tc.gain)} points</em></div>
     <div class="cc bbw"><b>Bench boost</b><span>GW ${d.horizon[bb.g]}</span><em>+${f1(bb.gain)} points</em></div></div>`;
   return {xiPts, tc, bb, cap:topCap, capN:capCount.get(topCap.code)||0, html:`${chips}<div class="gwt"><table><thead>${head}</thead><tbody>${body}</tbody><tfoot>${foot}</tfoot></table></div>
-    <p class="sqnote">How each week is chosen: the XI is the best legal eleven by projected points (one goalkeeper, at least 3 defenders, 2 midfielders and 1 forward), the top scorer wears the armband and counts double. Shaded cells start, faded cells are on the bench, and the small text is the opponent, with (H) home or (A) away. A boxed cell is the captain. TC and BB mark the best week for each chip, using this squad as it stands. Tap a player for his weekly reasoning, Keep and Swap.</p>`};
+    <p class="sqnote">How each week is chosen: the XI is the best legal eleven by projected points (one goalkeeper, at least 3 defenders, 2 midfielders and 1 forward), the top scorer wears the armband and counts double. The Bench line is what the four substitutes score each week, to compare with the XI total. Shaded cells start, faded cells are on the bench, and the small text is the opponent, with (H) home or (A) away. A boxed cell is the captain. TC and BB mark the best week for each chip, using this squad as it stands. Tap a player for his weekly reasoning, Keep and Swap.</p>`};
 }
 const horizonLabel = hz => hz===1 ? 'the next gameweek' : hz+' gameweeks';
 const MEDNOTE = 'A red or amber plus marks a player who is injured, suspended or doubtful: his projection already allows for missed games, but injury news changes fast, so check before acting.';
@@ -707,15 +715,22 @@ function transferOptions(data, hz, T, sq){
   out.sort((x,y)=>y.gain-x.gain);
   return {base, opts:out.slice(0,NOPT), total:out.length};
 }
+function workTeam(T){
+  const by = new Map(state.data.players.map(p=>[p.code,p])), m = new Map(T.squad.map(x=>[x.code,x.sell])); let bank = T.bank;
+  for(const mv of state.moves){ const sell = m.get(mv.o), pin = by.get(mv.i); if(sell==null||!pin) continue; m.delete(mv.o); m.set(mv.i, pin.price); bank = Math.round((bank+sell-pin.price)*10)/10; }
+  return {squad:[...m].map(([code,sell])=>({code,sell})), bank};
+}
 function weekly(sq, hz){ const r=[]; for(let g=0; g<hz; g++) r.push(pickGW(sq,g).pts); return r; }
 function renderTeam(hz, T){
   const d = state.data, out = $('#sqout');
   if(T.error){ out.innerHTML = `<div class="empty">Team ${esc(T.label)} could not be loaded on the last update (${esc(T.error)}). It will be tried again on the next run.</div>`; return; }
-  const by = new Map(d.players.map(p=>[p.code,p])), sq = T.squad.map(x=>by.get(x.code));
-  if(sq.length!==15 || sq.some(p=>!p)){ out.innerHTML = '<div class="empty">Some players in this team are missing from the projections, so it cannot be shown on this run.</div>'; return; }
+  const by = new Map(d.players.map(p=>[p.code,p])), sq0 = T.squad.map(x=>by.get(x.code));
+  if(sq0.length!==15 || sq0.some(p=>!p)){ out.innerHTML = '<div class="empty">Some players in this team are missing from the projections, so it cannot be shown on this run.</div>'; return; }
+  const W = workTeam(T), sq = W.squad.map(x=>by.get(x.code)), nm = state.moves.length;
   const owned = new Set(T.squad.map(x=>x.code)), L = lineupHTML(sq, hz, owned);
+  const base0 = weekly(sq0, hz).reduce((a,b)=>a+b,0), ftLeft = Math.max(0, state.ft-nm), hitSoFar = HIT*Math.max(0, nm-state.ft);
   const head = `<p class="sqnote"><b>${esc(T.name||T.label)}</b>${T.manager?`, ${esc(T.manager)}`:''}. Bank £${T.bank.toFixed(1)}m. Squad as of gameweek ${T.gw}${T.pending?`, with ${T.pending} transfer${T.pending>1?'s':''} already made for gameweek ${d.horizon[0]}`:''}. Free transfers are an estimate, so check the number above.</p>`;
-  const R = transferOptions(d, hz, T, sq), hit = state.ft>0 ? 0 : HIT;
+  const R = transferOptions(d, hz, W, sq), hit = ftLeft>0 ? 0 : HIT; state.optList = R.opts;
   const sg2 = x => (x>=0?'+':'\u2212')+Math.abs(x).toFixed(1);
   const before = weekly(sq, hz);
   const rows = R.opts.map((o,i) => {
@@ -724,7 +739,8 @@ function renderTeam(hz, T){
     if(open){
       const after = weekly(sq.map(p=>p.code===o.out.code?o.inn:p), hz);
       det = `<div class="od"><div class="ow">${after.map((v,g)=>`<span><small>GW ${d.horizon[g]}</small><b class="${v-before[g]>0.005?'up':''}">${sg2(v-before[g])}</b></span>`).join('')}</div>
-        <p>${esc(o.inn.name)} projects ${f1(sum(o.inn.ep,hz))} points over ${horizonLabel(hz)} against ${f1(sum(o.out.ep,hz))} for ${esc(o.out.name)}. The gain counts only what changes in your best XI each week (captain doubled), so a player who would sit on the bench adds nothing. Sells for £${o.sell.toFixed(1)}m, leaving £${o.left.toFixed(1)}m in the bank.${o.inn.status!=='a'&&o.inn.status!=='n'?' He is flagged with injury news.':''}</p></div>`;
+        <p>${esc(o.inn.name)} projects ${f1(sum(o.inn.ep,hz))} points over ${horizonLabel(hz)} against ${f1(sum(o.out.ep,hz))} for ${esc(o.out.name)}. The gain counts only what changes in your best XI each week (captain doubled), so a player who would sit on the bench adds nothing. Sells for £${o.sell.toFixed(1)}m, leaving £${o.left.toFixed(1)}m in the bank.${o.inn.status!=='a'&&o.inn.status!=='n'?' He is flagged with injury news.':''}</p>
+        <button type="button" class="do" data-do="${i}">Make this transfer</button></div>`;
     }
     return `<div class="to pos-${o.inn.pos}${open?' open':''}"><button type="button" class="tr" data-opt="${i}" aria-expanded="${open}">
       <span class="tl"><span class="in"><em>IN</em>${medical(o.inn)}<b>${esc(o.inn.name)}</b> <small>${o.inn.team} ${o.inn.pos} £${o.inn.price.toFixed(1)}m${o.inn.own!=null?' · '+o.inn.own.toFixed(1)+'%':''}</small></span>
@@ -732,9 +748,12 @@ function renderTeam(hz, T){
       <span class="tg"><b>${sg2(o.gain)}</b>${hit?`<small>${sg2(o.gain-hit)} after hit</small>`:'<small>points</small>'}</span></button>${det}</div>`;
   }).join('');
   const lst = R.opts.length
-    ? `<div class="tohd"><b>Best ${R.opts.length} single transfers</b><span>Ranked by projected points gained over ${horizonLabel(hz)}, using your best XI each week with the captain doubled. ${state.ft>0?`You have ${state.ft} free transfer${state.ft>1?'s':''}.`:`With no free transfer, each costs ${HIT} points: the second figure is after that.`} Tap one to see it week by week.</span></div>${rows}`
+    ? `<div class="tohd"><b>Best ${R.opts.length} single transfers</b><span>Ranked by projected points gained over ${horizonLabel(hz)}, using your best XI each week with the captain doubled. ${ftLeft>0?`You have ${ftLeft} free transfer${ftLeft>1?'s':''}.`:`With no free transfer left, each costs ${HIT} points: the second figure is after that.`} Tap one to see it week by week, then make it to see your squad and the next best transfers change.</span></div>${rows}`
     : '<div class="empty">No single transfer improves this squad within your budget and the three-per-club rule.</div>';
-  out.innerHTML = head + `<div class="sqsum"><div><b>${f1(L.xiPts)}</b><span>XI points with the captain doubled</span></div><div><b>${esc(short(L.cap.name))}</b><span>captain in ${L.capN} of ${hz} weeks</span></div><div><b>£${T.bank.toFixed(1)}m</b><span>in the bank</span></div></div>
+  const wi = nm ? `<div class="wi"><div><b>${nm} transfer${nm>1?'s':''} made</b> <span>${state.moves.map(m=>`${esc(by.get(m.o).name)} to ${esc(by.get(m.i).name)}`).join(', ')}</span></div>
+    <div class="wn"><span><b>${sg2(L.xiPts-base0)}</b> points</span><span><b>${hitSoFar?'\u2212'+hitSoFar:'0'}</b> hit</span><span><b>${sg2(L.xiPts-base0-hitSoFar)}</b> net</span></div>
+    <button type="button" id="wi-reset">Back to my team</button></div>` : '';
+  out.innerHTML = head + wi + `<div class="sqsum"><div><b>${f1(L.xiPts)}</b><span>XI points with the captain doubled</span></div><div><b>${esc(short(L.cap.name))}</b><span>captain in ${L.capN} of ${hz} weeks</span></div><div><b>£${W.bank.toFixed(1)}m</b><span>in the bank</span></div></div>
     <p class="sqnote">${MEDNOTE}</p>${L.html}${lst}`;
 }
 function buildSquad(){
@@ -769,6 +788,9 @@ document.addEventListener('click', ev => {
   else if(b.dataset.srow){ const c=+b.dataset.srow; state.srow = state.srow===c?null:c; renderSquad(); }
   else if(b.dataset.lock){ const c=+b.dataset.lock; state.locked.has(c)?state.locked.delete(c):state.locked.add(c); renderSquad(); }
   else if(b.dataset.ban){ const c=+b.dataset.ban; state.banned.add(c); state.locked.delete(c); buildSquad(); }
+  else if(b.dataset.do){ const o=state.optList[+b.dataset.do]; if(o){ state.moves.push({o:o.out.code,i:o.inn.code}); state.opt=null; renderSquad(); } }
+  else if(b.dataset.undo){ const k=state.moves.findIndex(m=>m.i===+b.dataset.undo); if(k>=0) state.moves=state.moves.slice(0,k); state.opt=null; state.srow=null; renderSquad(); }
+  else if(b.id==='wi-reset'){ state.moves=[]; state.opt=null; state.srow=null; renderSquad(); }
   else if(b.dataset.opt){ const i=+b.dataset.opt; state.opt = state.opt===i?null:i; renderSquad(); }
   else if(b.id==='ft-dn'){ state.ft=Math.max(0,state.ft-1); renderSquad(); }
   else if(b.id==='ft-up'){ state.ft=Math.min(5,state.ft+1); renderSquad(); }
@@ -790,7 +812,7 @@ document.addEventListener('input', ev => {
   if(t.id==='q'){ state.q=t.value.trim().toLowerCase(); render(); }
   else if(t.id==='team'){ state.team=t.value; render(); }
   else if(t.id==='hz'){ state.hz=+t.value; render(); }
-  else if(t.id==='sq-team'){ state.mine=+t.value; const T=curTeam(); if(T&&T.ft!=null) state.ft=T.ft; state.squad=null; state.opt=null; renderSquad(); }
+  else if(t.id==='sq-team'){ state.mine=+t.value; const T=curTeam(); if(T&&T.ft!=null) state.ft=T.ft; state.squad=null; state.opt=null; state.moves=[]; state.srow=null; renderSquad(); }
   else if(t.id==='sq-hz'){ state.squad=null; state.opt=null; renderSquad(); }
   else if(t.id==='avail'){ state.avail=t.checked; render(); }
   else if(t.id==='pmin'||t.id==='pmax'){ syncPrice(); render(); }
