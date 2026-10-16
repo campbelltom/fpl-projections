@@ -163,6 +163,8 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
 .lim select{font:inherit;padding:4px 6px}
 .lim .chip{border:1px solid var(--line,#8884);border-radius:99px;background:none;color:inherit;padding:2px 10px;font:inherit;cursor:pointer}
 .tht{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.to .fx{background:var(--warn);color:#000;border-radius:3px;padding:0 4px;margin-right:4px;font:700 .55rem var(--num);text-transform:uppercase;font-style:normal}
+.limw{margin:8px 0;font-size:.8rem}
 .nts{display:flex;align-items:center;gap:6px;font:600 .72rem var(--body);color:var(--ink2)}.nts select{font:inherit;padding:3px 6px}
 .to.co .tl{display:flex;flex-direction:column;gap:6px}.to.co .cl{display:flex;flex-direction:column;gap:1px}
 .sqctl{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;margin:4px 0 10px}
@@ -610,6 +612,8 @@ const MINXI = {DEF:3, MID:2, FWD:1};
 /* Optional limit on goalkeepers and defenders from one club (all clubs, or club by club). Default is the game's own limit of three players per club. */
 const capFor = t => Math.min(3, state.dcap[t]!==undefined ? state.dcap[t] : state.dall);
 const isDef = pos => pos==='DEF' || pos==='GKP';          // goalkeepers count with defenders for the club limit
+const defCounts = sq => { const c = {}; for(const o of sq) if(isDef(o.pos)) c[o.team] = (c[o.team]||0)+1; return c; };
+const defExcess = sq => { const c = defCounts(sq); let e = 0; for(const t in c) e += Math.max(0, c[t]-capFor(t)); return e; };
 const defOver = sq => { const c = {}; for(const o of sq) if(isDef(o.pos)){ c[o.team]=(c[o.team]||0)+1; if(c[o.team]>capFor(o.team)) return true; } return false; };
 const BENCH_W = 0.1;
 const BENCH_ORD = [1.6, 0.9, 0.5];           // first sub is called on far more often than the third, so each place down the bench counts for less (average stays near 1)
@@ -964,7 +968,7 @@ function transferOptions(data, hz, T, sq){
   const idx = new Map(data.players.map((p,k)=>[p.code,k]));
   const ob = p => ({pos:p.pos, k:idx.get(p.code), p});
   const cur = sq.map(ob), base = lineupScore(cur, E, hz, 0), base1 = lineupScore(cur, E, 1, 0);
-  const bank = T.bank, cnt = {}, dc = {}; sq.forEach(p => { cnt[p.team]=(cnt[p.team]||0)+1; if(isDef(p.pos)) dc[p.team]=(dc[p.team]||0)+1; });
+  const bank = T.bank, cnt = {}, e0 = defExcess(sq); sq.forEach(p => { cnt[p.team]=(cnt[p.team]||0)+1; });
   const cands = data.players.filter(p => p.price!=null && !owned.has(p.code) && !state.banned.has(p.code) && p.status!=='n');
   const out = [];
   cur.forEach((o,a) => {
@@ -974,16 +978,19 @@ function transferOptions(data, hz, T, sq){
       if(p.pos!==po.pos) continue;
       if(p.price > bank + sell + 1e-9) continue;
       if(p.team!==po.team && (cnt[p.team]||0) >= 3) continue;
-      if(isDef(p.pos) && p.team!==po.team && (dc[p.team]||0) >= capFor(p.team)) continue;
       const q = cur.slice(); q[a] = ob(p);
+      const e1 = isDef(p.pos) ? defExcess(q.map(o=>o.p)) : e0;   // never leave more players over your club limit than you started with
+      if(e1 > e0) continue;
+      const fix = e1 < e0;                                          // a move that brings the squad back inside the limit
       const gain1 = lineupScore(q, E, 1, 0) - base1;          // it has to pay off in the coming gameweek, or it can wait
-      if(gain1 <= 0.005) continue;
+      if(gain1 <= 0.005 && !fix) continue;
       const gain = lineupScore(q, E, hz, 0) - base;
-      if(gain > 0.005) out.push({out:po, inn:p, sell, gain, gain1, left:bank+sell-p.price});
+      if(gain > 0.005 || fix) out.push({out:po, inn:p, sell, gain, gain1, fix, left:bank+sell-p.price});
     }
   });
-  out.sort((x,y)=>y.gain-x.gain);
-  return {base, opts:out.slice(0,NOPT), total:out.length};
+  out.sort((x,y)=>(y.fix-x.fix) || y.gain-x.gain);
+  const fixes = out.filter(o=>o.fix).slice(0,8), rest = out.filter(o=>!o.fix);
+  return {base, opts:fixes.concat(rest).slice(0,NOPT), total:out.length, over:e0};
 }
 
 /* Best set of N transfers made together (N = 2 to 5). Local search over (player out, player in) slots with a penalty for overspending,
@@ -1001,21 +1008,24 @@ function comboSearch(data, hz, T, sq, n){
     const lo = Math.min(...all.map(c=>c.price10)), keep = new Set(all.slice(0,45)); all.filter(c=>c.price10<=lo+12).slice(0,25).forEach(c=>keep.add(c));
     cands[pos] = all.filter(c=>keep.has(c));
   }
+  const e0 = defExcess(sq);
   const free = sq.map((p,a) => a).filter(a => !state.locked.has(sq[a].code));
   const evs = sl => {
     const arr = cur.slice(), usedA = new Set(), usedC = new Set(); let spend = 0, got = 0;
     for(const s_ of sl){ if(usedA.has(s_.a) || usedC.has(s_.c.p.code) || s_.c.pos!==sq[s_.a].pos) return null; usedA.add(s_.a); usedC.add(s_.c.p.code); arr[s_.a] = s_.c; spend += s_.c.price10; got += sell10[s_.a]; }
     const cnt = {}, dc = {};
     for(const o of arr){ cnt[o.p.team] = (cnt[o.p.team]||0)+1; if(isDef(o.pos)) dc[o.p.team] = (dc[o.p.team]||0)+1; }
-    for(const t in cnt) if(cnt[t]>3 || (dc[t]||0)>capFor(t)) return null;
+    for(const t in cnt) if(cnt[t]>3) return null;
+    let exc = 0; for(const t in dc) exc += Math.max(0, dc[t]-capFor(t));
+    if(exc > e0) return null;                       // never end with more players over the club limit than now
     const deficit = Math.max(0, spend - got - bank10), gain = lineupScore(arr, E, hz, 0) - base;
-    return {gain, deficit, val: gain - 0.5*deficit, arr};
+    return {gain, deficit, exc, val: gain - 0.5*deficit - 4*exc, arr};
   };
   const seen = new Map();
   const finish = sl => {
     const r = evs(sl); if(!r || r.deficit>0) return;
-    const gain1 = lineupScore(r.arr, E, 1, 0) - base1; if(gain1 <= 0.005) return;
-    for(let i=0;i<sl.length;i++){ const r2 = evs(sl.filter((_,j)=>j!==i)); if(r2 && r2.deficit===0 && r2.gain > r.gain - 0.15) return; }   // a transfer that adds nothing
+    const gain1 = lineupScore(r.arr, E, 1, 0) - base1; if(gain1 <= 0.005 && !(r.exc < e0)) return;
+    for(let i=0;i<sl.length;i++){ const r2 = evs(sl.filter((_,j)=>j!==i)); if(r2 && r2.deficit===0 && r2.exc <= r.exc && r2.gain > r.gain - 0.15) return; }   // a transfer that adds nothing
     const key = sl.map(x=>x.a).sort().join(',')+'|'+sl.map(x=>x.c.p.code).sort().join(',');   // same players out and in, whichever way they are paired
     if(!seen.has(key)) seen.set(key, {sl:sl.slice().sort((x,y)=>x.a-y.a), gain:r.gain, gain1, left:(bank10 + sl.reduce((t,x)=>t+sell10[x.a]-x.c.price10,0))/10});
   };
@@ -1093,15 +1103,17 @@ function renderTeam(hz, T){
         <button type="button" class="do" data-do="${i}">Make this transfer</button></div>`;
     }
     return `<div class="to pos-${o.inn.pos}${open?' open':''}"><button type="button" class="tr" data-opt="${i}" aria-expanded="${open}">
-      <span class="tl"><span class="in"><em>IN</em>${medical(o.inn)}<b>${esc(o.inn.name)}</b> <small>${o.inn.team} ${o.inn.pos} £${o.inn.price.toFixed(1)}m${o.inn.own!=null?' · '+o.inn.own.toFixed(1)+'%':''}</small></span>
+      <span class="tl"><span class="in"><em>IN</em>${o.fix?'<em class="fx">fixes limit</em>':''}${medical(o.inn)}<b>${esc(o.inn.name)}</b> <small>${o.inn.team} ${o.inn.pos} £${o.inn.price.toFixed(1)}m${o.inn.own!=null?' · '+o.inn.own.toFixed(1)+'%':''}</small></span>
       <span class="ot"><em>OUT</em><b>${esc(o.out.name)}</b> <small>${o.out.team} £${o.sell.toFixed(1)}m</small></span></span>
       <span class="tg"><b>${sg2(o.gain)}</b>${hit?`<small>${sg2(o.gain-hit)} after hit</small>`:`<small>${sg2(o.gain1)} in GW ${d.horizon[0]}</small>`}</span></button>${det}</div>`;
   }).join('');
   const ntSel = `<label class="nts">Transfers together<select id="nt" aria-label="How many transfers to combine">${[1,2,3,4,5].map(k=>`<option value="${k}"${k===nt?' selected':''}>${k===1?'1 (single moves)':k+' at once'}</option>`).join('')}</select></label>`;
   const hitN = k => HIT*Math.max(0, k-ftLeft);
+  const dcs = defCounts(sq), overs = Object.keys(dcs).filter(t => dcs[t] > capFor(t)).map(t => `${t} has ${dcs[t]} goalkeepers and defenders (limit ${capFor(t)})`);
+  const limWarn = overs.length ? `<div class="wi limw"><b>Over your club limit:</b> ${overs.join('; ')}. Suggestions never add to this, and moves that bring it back inside the limit are listed first, marked "fixes limit", even if they gain little.</div>` : '';
   let lst;
   if(nt===1){
-    lst = `<div class="tohd"><div class="tht"><b>${R.opts.length?`Best ${R.opts.length} single transfers`:'Single transfers'}</b>${ntSel}</div><span>Only moves that add points in the coming gameweek are listed; the rest can wait. ${ftLeft>0?`You have ${ftLeft} free transfer${ftLeft>1?'s':''}.`:`With no free transfer left, each costs ${HIT} points: the second figure is after that.`}</span></div>`
+    lst = limWarn + `<div class="tohd"><div class="tht"><b>${R.opts.length?`Best ${R.opts.length} single transfers`:'Single transfers'}</b>${ntSel}</div><span>Only moves that add points in the coming gameweek are listed; the rest can wait. ${ftLeft>0?`You have ${ftLeft} free transfer${ftLeft>1?'s':''}.`:`With no free transfer left, each costs ${HIT} points: the second figure is after that.`}</span></div>`
       + (R.opts.length ? rows : '<div class="empty">No single transfer improves this squad within your budget and the three-per-club rule.</div>');
   } else {
     const cb = state.combo, hn = hitN(nt);
@@ -1120,7 +1132,7 @@ function renderTeam(hz, T){
       }
       return `<div class="to co${open?' open':''}"><button type="button" class="tr" data-co="${i}" aria-expanded="${open}"><span class="tl">${lines}</span><span class="tg"><b>${sg2(r.gain)}</b><small>${hn?sg2(net)+' after hits':sg2(r.gain1)+' in GW '+d.horizon[0]}</small></span></button>${det}</div>`;
     }).join('');
-    lst = `<div class="tohd"><div class="tht"><b>Best ${nt} transfers together</b>${ntSel}</div><span>Sets of ${nt} moves chosen jointly, so one sale can fund another signing. Every transfer in a set has to add something; each set must also add points in the coming gameweek. ${ftLeft>0?`You have ${ftLeft} free transfer${ftLeft>1?'s':''}${nt>ftLeft?`, so ${nt-ftLeft} cost${nt-ftLeft>1?'':'s'} ${HIT} points each`:''}.`:`With no free transfer left, each costs ${HIT} points.`}</span></div>${body}`;
+    lst = limWarn + `<div class="tohd"><div class="tht"><b>Best ${nt} transfers together</b>${ntSel}</div><span>Sets of ${nt} moves chosen jointly, so one sale can fund another signing. Every transfer in a set has to add something; each set must also add points in the coming gameweek. ${ftLeft>0?`You have ${ftLeft} free transfer${ftLeft>1?'s':''}${nt>ftLeft?`, so ${nt-ftLeft} cost${nt-ftLeft>1?'':'s'} ${HIT} points each`:''}.`:`With no free transfer left, each costs ${HIT} points.`}</span></div>${body}`;
   }
   const wi = nm ? `<div class="wi"><div><b>${nm} transfer${nm>1?'s':''} made</b> <span>${state.moves.map(m=>`${esc(by.get(m.o).name)} to ${esc(by.get(m.i).name)}`).join(', ')}</span></div>
     <div class="wn"><span><b>${sg2(L.xiPts-base0)}</b> points</span><span><b>${hitSoFar?'\u2212'+hitSoFar:'0'}</b> hit</span><span><b>${sg2(L.xiPts-base0-hitSoFar)}</b> net</span></div>
