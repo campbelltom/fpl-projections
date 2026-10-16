@@ -995,13 +995,14 @@ function transferOptions(data, hz, T, sq){
 
 /* Best set of N transfers made together (N = 2 to 5). Local search over (player out, player in) slots with a penalty for overspending,
    from several starting points; a set is only kept if every transfer in it is needed (dropping any one costs real points). */
-function comboSearch(data, hz, T, sq, n){
+function comboSearch(data, hz, T, sq, n, ban, nStarts){
+  ban = ban || new Set(); nStarts = nStarts || (n>=4 ? 5 : 7);
   const owned = new Map(T.squad.map(x => [x.code, x.sell]));
   const E = data.players.map(p => p.ep.slice(0,hz)), idx = new Map(data.players.map((p,k)=>[p.code,k]));
   const ob = p => ({pos:p.pos, k:idx.get(p.code), p});
   const cur = sq.map(ob), base = lineupScore(cur, E, hz, 0), base1 = lineupScore(cur, E, 1, 0);
   const bank10 = Math.round(T.bank*10), sell10 = sq.map(p => Math.round(owned.get(p.code)*10));
-  const cands = {}, pool = data.players.filter(p => p.price!=null && !owned.has(p.code) && !state.banned.has(p.code) && p.status!=='n');
+  const cands = {}, pool = data.players.filter(p => p.price!=null && !owned.has(p.code) && !state.banned.has(p.code) && !ban.has(p.code) && p.status!=='n');
   for(const pos of ['GKP','DEF','MID','FWD']){
     const all = pool.filter(p=>p.pos===pos).map(p => Object.assign(ob(p), {price10:Math.round(p.price*10), tot:sum(p.ep,hz), team:p.team}));
     all.sort((a,b)=>b.tot-a.tot);
@@ -1060,15 +1061,23 @@ function comboSearch(data, hz, T, sq, n){
   const first = [];
   for(const a of free) for(const c of cands[sq[a].pos]){ const r = evs([{a,c}]); if(r) first.push({sl:[{a,c}], v:r.val}); }
   first.sort((x,y)=>y.v-x.v);
-  const starts = first.slice(0, 7);
+  const starts = first.slice(0, nStarts);
   for(const st of starts){
     let sl = st.sl;
     while(sl.length<n){ const m = bestMove(sl, n); if(!m.best) break; sl = m.best; }
     if(sl.length<n) continue;
     finish(polish(sl));
   }
-  const res = [...seen.values()].sort((x,y)=>y.gain-x.gain).slice(0,5);
+  const res = [...seen.values()].sort((x,y)=>y.gain-x.gain).slice(0,8);
   return res.map(r => ({gain:r.gain, gain1:r.gain1, left:r.left, moves:r.sl.map(x => ({out:sq[x.a], inn:x.c.p, sell:sell10[x.a]/10}))}));
+}
+/* The best set, then the best sets that avoid each of its signings in turn, so there are real alternatives to compare. */
+function comboTop(data, hz, T, sq, n){
+  const all = new Map(), key = r => r.moves.map(m=>m.out.code).sort().join(',')+'|'+r.moves.map(m=>m.inn.code).sort().join(',');
+  const add = rs => rs.forEach(r => { if(!all.has(key(r))) all.set(key(r), r); });
+  const first = comboSearch(data, hz, T, sq, n); add(first);
+  if(first.length) for(const m of first[0].moves) add(comboSearch(data, hz, T, sq, n, new Set([m.inn.code]), n>=4 ? 2 : 3));
+  return [...all.values()].sort((x,y)=>y.gain-x.gain).slice(0,5);
 }
 function workTeam(T){
   const by = new Map(state.data.players.map(p=>[p.code,p])), m = new Map(T.squad.map(x=>[x.code,x.sell])); let bank = adjBank(T);
@@ -1089,7 +1098,7 @@ function renderTeam(hz, T){
   const nt = state.nt, cKey = [nm, hz, nt, state.ft, [...state.banned].join(), [...state.locked].join(), state.dall, JSON.stringify(state.dcap), JSON.stringify(state.mo).length, d.generated_at, W.bank].join('|');
   if(nt>1 && (!state.combo || state.combo.key!==cKey)){
     const cb = state.combo = {key:cKey, busy:true, res:null};
-    setTimeout(() => { try{ cb.res = comboSearch(d, hz, W, sq, nt); }catch(e){ cb.res = []; } cb.busy = false; if(state.combo===cb && view_is_squad()) renderSquad(); }, 30);
+    setTimeout(() => { try{ cb.res = comboTop(d, hz, W, sq, nt); }catch(e){ cb.res = []; } cb.busy = false; if(state.combo===cb && view_is_squad()) renderSquad(); }, 30);
   }
   const sg2 = x => (x>=0?'+':'\u2212')+Math.abs(x).toFixed(1);
   const before = weekly(sq, hz);
@@ -1254,7 +1263,7 @@ function setView(v){
   $('#pctl').hidden = other; $('#list').hidden = other; $('#squadview').hidden = !sqv; $('#pensview').hidden = !pv; $('#lineupview').hidden = !lv; document.querySelector('.dock').hidden = other;
   if(sqv) renderSquad(); else if(pv) renderPens(); else if(lv) renderLineups(); else render();
 }
-window.FPL = {solveSquad, transferOptions, comboSearch, workTeam, lineupScore, pickGW, state};
+window.FPL = {solveSquad, transferOptions, comboSearch, comboTop, workTeam, lineupScore, pickGW, state};
 
 /* ---------- events ---------- */
 const sheet = $('#sheet');
