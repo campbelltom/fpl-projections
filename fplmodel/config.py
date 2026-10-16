@@ -19,7 +19,7 @@ POSITIONS = ["GKP", "DEF", "MID", "FWD"]
 # that earns the DC points. Verified empirically against event_points (tests/test_scoring.py).
 DC_THRESHOLD = {"DEF": 10, "MID": 12, "FWD": 12, "GKP": None}
 
-HORIZON_GWS = 8
+HORIZON_GWS = 16
 
 # Squad rules used for the 'value over minimum spend' number
 SQUAD = {"GKP": 2, "DEF": 5, "MID": 5, "FWD": 3}

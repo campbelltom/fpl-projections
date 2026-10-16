@@ -417,6 +417,7 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
 'use strict';
 const $ = s => document.querySelector(s);
 const POS = ['All','GKP','DEF','MID','FWD'];
+let DEF_HZ = 8;
 const state = {pos:'All', team:'', q:'', hz:8, avail:true, sort:'total', open:null, pmin:0, pmax:99, lo:0, hi:99, data:null, intro:true, vbase:'starter', view:'players', mine:-1, ft:1, plan:null, sel:null, budget:100, locked:new Set(), banned:new Set(), squad:null, srow:null, opt:null, wc:null, wcg:null, wcv:'fh', lug:0, luo:new Set(), rpl:null, repq:'', mo:{}, mp:null, mw:null, moves:[], optList:[], dall:3, dcap:{}};
 const store = {
   get(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } },
@@ -473,7 +474,7 @@ const sum = (a,n) => a.slice(0,n).reduce((x,y)=>x+y,0);
 const f1 = x => x.toFixed(1);
 
 function start(d){
-  state.data = d; state.hz = d.horizon.length; loadLimits(); moInit(d); moBar();
+  state.data = d; DEF_HZ = Math.min(8, d.horizon.length); state.hz = DEF_HZ;   // lists and transfers default to 8 weeks; the data (and the wildcard) run further loadLimits(); moInit(d); moBar();
   const pr = d.players.map(p => p.price).filter(x => x != null);
   state.lo = state.pmin = Math.floor(Math.min(...pr)*10)/10; state.hi = state.pmax = Math.ceil(Math.max(...pr)*10)/10;
   $('#lock').hidden = true; $('#app').hidden = false;
@@ -505,7 +506,7 @@ function syncPrice(){
   $('#pout').textContent=`£${state.pmin.toFixed(1)}m to £${state.pmax.toFixed(1)}m`;
 }
 function activeFilters(){
-  return (state.team?1:0) + ((state.pmin>state.lo||state.pmax<state.hi)?1:0) + (state.hz!==state.data.horizon.length?1:0) + (state.avail?0:1);
+  return (state.team?1:0) + ((state.pmin>state.lo||state.pmax<state.hi)?1:0) + (state.hz!==DEF_HZ?1:0) + (state.avail?0:1);
 }
 
 /* Value = points above a minimum-price player, per GBP m spent above the minimum price for that position.
@@ -1020,7 +1021,7 @@ function renderTeam(hz, T){
 /* ---------- wildcard and free hit simulation ---------- */
 function wcCtx(){
   const T = curTeam(); if(!T || T.error) return null;
-  const hz = +$('#sq-hz').value || state.data.horizon.length, W = workTeam(T);
+  const hz = state.data.horizon.length, W = workTeam(T);        // the wildcard looks at the whole period
   const by = new Map(state.data.players.map(p=>[p.code,p])), sq = W.squad.map(x=>by.get(x.code));
   const owned = new Map(W.squad.map(x=>[x.code,x.sell]));
   const B = Math.round((W.bank + W.squad.reduce((t,x)=>t+x.sell,0))*10)/10;
@@ -1040,7 +1041,7 @@ function runWild(){
       if(state.wc!==st) return;
       if(k>=c.hz){ st.busy = false; upd(); return; }
       const dk = {squad:d.squad, players:d.players.map(p => Object.assign({}, p, {ep:p.ep.slice(k, c.hz)}))};
-      const r = solveSquad(dk, c.hz-k, c.B, new Set(), state.banned, 6, c.owned);
+      const r = solveSquad(dk, c.hz-k, c.B, new Set(), state.banned, 4, c.owned);
       st.wk[k] = r ? r.squad.map(x => d.players.find(p=>p.code===x.code)) : null;
       k++; st.done++; upd(); setTimeout(nextW, 10);
     };
@@ -1048,7 +1049,7 @@ function runWild(){
       if(state.wc!==st) return;
       if(g>=c.hz){ st.wk[0] = st.wild.squad; k = 1; setTimeout(nextW, 10); return; }
       const dg = {squad:d.squad, players:d.players.map(p => Object.assign({}, p, {ep:[p.ep[g]]}))};
-      const r = solveSquad(dg, 1, c.B, new Set(), state.banned, 6, c.owned);
+      const r = solveSquad(dg, 1, c.B, new Set(), state.banned, 4, c.owned);
       const sqg = r ? r.squad.map(x => d.players.find(p=>p.code===x.code)) : null;
       st.fh.push(sqg ? {g, squad:sqg, pts:pickGW(sqg,g).pts} : {g, squad:null, pts:0});
       g++; st.done++; upd(); setTimeout(next, 10);
@@ -1174,7 +1175,7 @@ document.addEventListener('click', ev => {
   else if(b.id==='fopen'){ sheet.showModal(); }
   else if(b.id==='done'){ sheet.close(); }
   else if(b.id==='reset'){
-    Object.assign(state,{team:'',hz:state.data.horizon.length,avail:true,vbase:'starter'}); document.querySelectorAll('#vb button').forEach(x=>x.setAttribute('aria-pressed',x.dataset.vb==='starter'));
+    Object.assign(state,{team:'',hz:DEF_HZ,avail:true,vbase:'starter'}); document.querySelectorAll('#vb button').forEach(x=>x.setAttribute('aria-pressed',x.dataset.vb==='starter'));
     $('#team').value=''; $('#hz').value=state.hz; $('#avail').checked=true; $('#pmin').value=state.lo; $('#pmax').value=state.hi; syncPrice(); render();
   }
 });

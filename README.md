@@ -1,6 +1,6 @@
 # FPL projections
 
-Expected FPL points per player for the next 8 gameweeks, rebuilt from scratch.
+Expected FPL points per player for the next 16 gameweeks (the site shows the next 8 by default; the wildcard planner uses all 16), rebuilt from scratch.
 
 - Data: `olbauday/FPL-Core-Insights` (refreshes 07:30 and 17:30 UTC). Everything is keyed on `player_code` / team `code`; ids are not stable across seasons.
 - Model: team attack/defence model (xG, shots on target, defensive actions) -> player shares with recency decay -> minutes/availability -> exact point distributions under the official scoring (`config/scoring_snapshot.json`, refreshed from the live API when reachable).

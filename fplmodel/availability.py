@@ -17,7 +17,7 @@ import pandas as pd
 
 MONTHS = {m: i + 1 for i, m in enumerate(["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"])}
 RET_RE = re.compile(r"expected back (\d{1,2}) ([A-Za-z]{3})", re.I)
-HORIZON = 8
+HORIZON = 16
 
 
 def v_of(status, chance) -> float:
