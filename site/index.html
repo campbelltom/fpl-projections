@@ -1035,14 +1035,14 @@ function runWild(){
   const upd = () => { const b = $('#wcbox'); if(b) b.innerHTML = wcHTML(); };
   upd();
   setTimeout(() => {
-    st.wild = solveSquad(d, c.hz, c.B, new Set(), state.banned, 8, c.owned); st.done++; upd();
+    st.wild = solveSquad(d, c.H, c.B, new Set(), state.banned, 8, c.owned); st.done++; upd();
     let g = 0, k = 1;
-    // a wildcard played in a later gameweek: the best squad for that week to the end of the period (your team until then)
+    // a wildcard played in a later gameweek: the best squad for the next H weeks from then (weeks past the shown ones only exist so late starts have a full window) (your team until then)
     const nextW = () => {
       if(state.wc!==st) return;
       if(k>=c.H){ st.busy = false; upd(); return; }
-      const dk = {squad:d.squad, players:d.players.map(p => Object.assign({}, p, {ep:p.ep.slice(k, c.hz)}))};
-      const r = solveSquad(dk, c.hz-k, c.B, new Set(), state.banned, 4, c.owned);
+      const dk = {squad:d.squad, players:d.players.map(p => Object.assign({}, p, {ep:p.ep.slice(k, k+c.H)}))};
+      const r = solveSquad(dk, Math.min(c.H, c.hz-k), c.B, new Set(), state.banned, 4, c.owned);
       st.wk[k] = r ? r.squad.map(x => d.players.find(p=>p.code===x.code)) : null;
       k++; st.done++; upd(); setTimeout(nextW, 10);
     };
