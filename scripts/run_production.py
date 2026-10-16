@@ -171,8 +171,7 @@ def main() -> None:
             row["pen"] = {"share": round(float(r_["pen_share"]), 2), "taken": int(r_["pen_n_club"]), "fpl": None if pd.isna(r_["fpl_order"]) else int(r_["fpl_order"]),
                          "exp": round(float(pen_exp.get(pc, 0.0)), 2), "mover": bool(r_["mover"])}
         row["total"] = round(float(sum(row["ep"])), 2)
-        if row["total"] >= 0.05 or int(pc) in owned:
-            out_players.append(row)
+        out_players.append(row)           # everyone is listed, even with no projection, so a status can always be checked
     out_players.sort(key=lambda r: -r["total"])
     n_low = sum(r["low_history"] for r in out_players)
     if n_low:

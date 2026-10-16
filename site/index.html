@@ -405,7 +405,7 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
     <div class="f"><label for="hz">Gameweeks counted in the total</label><select id="hz"></select></div>
     <div class="f"><div class="lab"><span>Value compares against</span></div>
       <div class="sort wide" id="vb" role="group" aria-label="Value baseline"><button type="button" data-vb="starter" aria-pressed="true">Cheapest starter</button><button type="button" data-vb="floor" aria-pressed="false">Minimum price</button></div></div>
-    <label class="tg">Hide injured and suspended players<input id="avail" type="checkbox" checked></label>
+    <label class="tg">Hide injured and suspended players<input id="avail" type="checkbox"></label>
     <div class="acts"><button class="reset" id="reset" type="button">Reset</button><button class="done" id="done" type="button">Show players</button></div>
   </div></dialog>
 </main>
@@ -418,7 +418,7 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
 const $ = s => document.querySelector(s);
 const POS = ['All','GKP','DEF','MID','FWD'];
 let DEF_HZ = 8;
-const state = {pos:'All', team:'', q:'', hz:8, avail:true, sort:'total', open:null, pmin:0, pmax:99, lo:0, hi:99, data:null, intro:true, vbase:'starter', view:'players', mine:-1, ft:1, plan:null, sel:null, budget:100, locked:new Set(), banned:new Set(), squad:null, srow:null, opt:null, wc:null, wcg:null, wcv:'fh', lug:0, luo:new Set(), rpl:null, repq:'', mo:{}, mp:null, mw:null, moves:[], optList:[], dall:3, dcap:{}};
+const state = {pos:'All', team:'', q:'', hz:8, avail:false, sort:'total', open:null, pmin:0, pmax:99, lo:0, hi:99, data:null, intro:true, vbase:'starter', view:'players', mine:-1, ft:1, plan:null, sel:null, budget:100, locked:new Set(), banned:new Set(), squad:null, srow:null, opt:null, wc:null, wcg:null, wcv:'fh', lug:0, luo:new Set(), rpl:null, repq:'', mo:{}, mp:null, mw:null, moves:[], optList:[], dall:3, dcap:{}};
 const store = {
   get(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } },
   set(k,v){ try{ localStorage.setItem(k,v); }catch(e){} },
@@ -507,7 +507,7 @@ function syncPrice(){
   $('#pout').textContent=`£${state.pmin.toFixed(1)}m to £${state.pmax.toFixed(1)}m`;
 }
 function activeFilters(){
-  return (state.team?1:0) + ((state.pmin>state.lo||state.pmax<state.hi)?1:0) + (state.hz!==DEF_HZ?1:0) + (state.avail?0:1);
+  return (state.team?1:0) + ((state.pmin>state.lo||state.pmax<state.hi)?1:0) + (state.hz!==DEF_HZ?1:0) + (state.avail?1:0);
 }
 
 /* Value = points above a minimum-price player, per GBP m spent above the minimum price for that position.
@@ -561,7 +561,7 @@ function render(){
   $('#count').textContent = `${rows.length} player${rows.length===1?'':'s'}`;
   const nf = activeFilters(); $('#fn').hidden = !nf; $('#fn').textContent = nf;
   const T0 = curTeam(), mineSet = new Set(T0&&!T0.error&&T0.squad ? T0.squad.map(x=>x.code) : []);
-  const shown = rows.slice(0,300);
+  const shown = rows.slice(0,800);
   if(!shown.length){ $('#list').innerHTML = '<div class="empty">No players match these filters. Open Filters and press Reset.</div>'; return; }
   $('#list').className = state.intro ? 'intro' : '';
   $('#list').innerHTML = shown.map(p => {
@@ -1037,7 +1037,7 @@ function runWild(){
   setTimeout(() => {
     st.wild = solveSquad(d, c.H, c.B, new Set(), state.banned, 8, c.owned); st.done++; upd();
     let g = 0, k = 1;
-    // a wildcard played in a later gameweek: the best squad for the next H weeks from then (weeks past the shown ones only exist so late starts have a full window) (your team until then)
+    // a wildcard played in a later gameweek: the best squad for the next H weeks from then (weeks past the shown ones only exist so late starts have a full window)
     const nextW = () => {
       if(state.wc!==st) return;
       if(k>=c.H){ st.busy = false; upd(); return; }
@@ -1176,8 +1176,8 @@ document.addEventListener('click', ev => {
   else if(b.id==='fopen'){ sheet.showModal(); }
   else if(b.id==='done'){ sheet.close(); }
   else if(b.id==='reset'){
-    Object.assign(state,{team:'',hz:DEF_HZ,avail:true,vbase:'starter'}); document.querySelectorAll('#vb button').forEach(x=>x.setAttribute('aria-pressed',x.dataset.vb==='starter'));
-    $('#team').value=''; $('#hz').value=state.hz; $('#avail').checked=true; $('#pmin').value=state.lo; $('#pmax').value=state.hi; syncPrice(); render();
+    Object.assign(state,{team:'',hz:DEF_HZ,avail:false,vbase:'starter'}); document.querySelectorAll('#vb button').forEach(x=>x.setAttribute('aria-pressed',x.dataset.vb==='starter'));
+    $('#team').value=''; $('#hz').value=state.hz; $('#avail').checked=false; $('#pmin').value=state.lo; $('#pmax').value=state.hi; syncPrice(); render();
   }
 });
 document.addEventListener('change', ev => { if(ev.target.id==='mslide') moSet(+ev.target.value/100, null); });
