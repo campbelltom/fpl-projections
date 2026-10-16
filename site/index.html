@@ -164,6 +164,7 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
 .lim .chip{border:1px solid var(--line,#8884);border-radius:99px;background:none;color:inherit;padding:2px 10px;font:inherit;cursor:pointer}
 .tht{display:flex;justify-content:space-between;align-items:center;gap:8px}
 .to .fx{background:var(--warn);color:#000;border-radius:3px;padding:0 4px;margin-right:4px;font:700 .55rem var(--num);text-transform:uppercase;font-style:normal}
+.lim .kg{display:flex;align-items:center;gap:6px}
 .limw{margin:8px 0;font-size:.8rem}
 .nts{display:flex;align-items:center;gap:6px;font:600 .72rem var(--body);color:var(--ink2)}.nts select{font:inherit;padding:3px 6px}
 .to.co .tl{display:flex;flex-direction:column;gap:6px}.to.co .cl{display:flex;flex-direction:column;gap:1px}
@@ -424,7 +425,7 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
 const $ = s => document.querySelector(s);
 const POS = ['All','GKP','DEF','MID','FWD'];
 let DEF_HZ = 8;
-const state = {pos:'All', team:'', q:'', hz:8, avail:false, sort:'total', open:null, pmin:0, pmax:99, lo:0, hi:99, data:null, intro:true, vbase:'starter', view:'players', mine:-1, ft:1, plan:null, sel:null, budget:100, locked:new Set(), banned:new Set(), squad:null, srow:null, opt:null, wc:null, wcg:null, wcv:'fh', lug:0, luo:new Set(), rpl:null, repq:'', mo:{}, mp:null, mw:null, moves:[], optList:[], dall:3, dcap:{}, nt:1, combo:null, copen:null, bkadj:{}};
+const state = {pos:'All', team:'', q:'', hz:8, avail:false, sort:'total', open:null, pmin:0, pmax:99, lo:0, hi:99, data:null, intro:true, vbase:'starter', view:'players', mine:-1, ft:1, plan:null, sel:null, budget:100, locked:new Set(), banned:new Set(), squad:null, srow:null, opt:null, wc:null, wcg:null, wcv:'fh', lug:0, luo:new Set(), rpl:null, repq:'', mo:{}, mp:null, mw:null, moves:[], optList:[], dall:3, dcap:{}, keepGk:true, nt:1, combo:null, copen:null, bkadj:{}};
 const store = {
   get(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } },
   set(k,v){ try{ localStorage.setItem(k,v); }catch(e){} },
@@ -612,6 +613,7 @@ const MINXI = {DEF:3, MID:2, FWD:1};
 /* Optional limit on goalkeepers and defenders from one club (all clubs, or club by club). Default is the game's own limit of three players per club. */
 const capFor = t => Math.min(3, state.dcap[t]!==undefined ? state.dcap[t] : state.dall);
 const isDef = pos => pos==='DEF' || pos==='GKP';          // goalkeepers count with defenders for the club limit
+const benchGk = (sq, hz) => { const g = sq.filter(p=>p.pos==='GKP'); return g.length<2 ? null : g.reduce((a,b)=>sum(b.ep,hz)<sum(a.ep,hz)?b:a).code; };   // the spare keeper
 const defCounts = sq => { const c = {}; for(const o of sq) if(isDef(o.pos)) c[o.team] = (c[o.team]||0)+1; return c; };
 const defExcess = sq => { const c = defCounts(sq); let e = 0; for(const t in c) e += Math.max(0, c[t]-capFor(t)); return e; };
 const defOver = sq => { const c = {}; for(const o of sq) if(isDef(o.pos)){ c[o.team]=(c[o.team]||0)+1; if(c[o.team]>capFor(o.team)) return true; } return false; };
@@ -927,18 +929,19 @@ function curTeam(){ return state.mine>=0 ? state.data.teams[state.mine] : null; 
 
 function loadBank(){ try{ state.bkadj = JSON.parse(store.get('fpl-bkadj')||'{}') || {}; }catch(e){ state.bkadj = {}; } }
 const adjBank = T => Math.round((T.bank + (state.bkadj[T.id]||0))*10)/10;
-function loadLimits(){ try{ const v = JSON.parse(store.get('fpl-dlim')||'null'); if(v){ state.dall = [1,2,3].includes(v.all)?v.all:3; state.dcap = v.cap||{}; } }catch(e){} }
-function saveLimits(){ store.set('fpl-dlim', JSON.stringify({all:state.dall, cap:state.dcap})); }
+function loadLimits(){ try{ const v = JSON.parse(store.get('fpl-dlim')||'null'); if(v){ state.dall = [1,2,3].includes(v.all)?v.all:3; state.dcap = v.cap||{}; state.keepGk = v.kgk!==false; } }catch(e){} }
+function saveLimits(){ store.set('fpl-dlim', JSON.stringify({all:state.dall, cap:state.dcap, kgk:state.keepGk})); }
 function renderLimits(){
   const teams = [...new Set(state.data.players.map(p=>p.team))].sort(), n = Object.keys(state.dcap).length;
   const opt = (v,cur) => [1,2,3].map(k=>`<option value="${k}"${k===cur?' selected':''}>${k}</option>`).join('');
-  $('#lim').querySelector('summary').textContent = 'Club limits' + (state.dall<3||n ? ' (on)' : '');
+  $('#lim').querySelector('summary').textContent = 'Limits and preferences' + (state.dall<3||n||!state.keepGk ? ' (changed)' : '');
   $('#limbody').innerHTML = `<div class="lr"><span>Most goalkeepers and defenders from one club:</span><select id="lim-all" aria-label="Most goalkeepers and defenders from any club">${opt(0,state.dall)}</select><span>(3 is the game's own limit)</span></div>
     <div class="lr"><span>Club by club:</span><select id="lim-club" aria-label="Club">${teams.map(t=>`<option>${t}</option>`).join('')}</select><select id="lim-n" aria-label="Most goalkeepers and defenders">${opt(0,2)}</select><button type="button" class="chip" id="lim-set">Set</button>${Object.keys(state.dcap).sort().map(t=>`<button type="button" class="chip" data-limx="${t}" title="Remove">${t} max ${state.dcap[t]} \u00d7</button>`).join('')}</div>
+    <label class="lr kg"><input type="checkbox" id="lim-gk"${state.keepGk?' checked':''}> Leave my spare goalkeeper alone (never suggest selling him)</label>
     <div class="sqnote">Applies to the squad builder, wildcard, free hit, replacements and suggested transfers. Goalkeepers count with defenders; midfielders and forwards are not capped beyond the game's three-per-club rule.</div>`;
 }
 function limChanged(){ saveLimits(); state.wc = null; renderSquad(); }
-document.addEventListener('change', ev => { if(ev.target.id==='nt'){ state.nt = +ev.target.value; state.copen = null; state.opt = null; renderSquad(); return; } if(ev.target.id==='lim-all'){ state.dall = +ev.target.value; limChanged(); } });
+document.addEventListener('change', ev => { if(ev.target.id==='lim-gk'){ state.keepGk = ev.target.checked; limChanged(); return; } if(ev.target.id==='nt'){ state.nt = +ev.target.value; state.copen = null; state.opt = null; renderSquad(); return; } if(ev.target.id==='lim-all'){ state.dall = +ev.target.value; limChanged(); } });
 document.addEventListener('click', ev => {
   if(ev.target.id==='lim-set'){ state.dcap[$('#lim-club').value] = +$('#lim-n').value; limChanged(); }
   const x = ev.target.closest('button[data-limx]'); if(x){ delete state.dcap[x.dataset.limx]; limChanged(); }
@@ -968,11 +971,12 @@ function transferOptions(data, hz, T, sq){
   const idx = new Map(data.players.map((p,k)=>[p.code,k]));
   const ob = p => ({pos:p.pos, k:idx.get(p.code), p});
   const cur = sq.map(ob), base = lineupScore(cur, E, hz, 0), base1 = lineupScore(cur, E, 1, 0);
-  const bank = T.bank, cnt = {}, e0 = defExcess(sq); sq.forEach(p => { cnt[p.team]=(cnt[p.team]||0)+1; });
+  const spareGk = benchGk(sq, hz), bank = T.bank, cnt = {}, e0 = defExcess(sq); sq.forEach(p => { cnt[p.team]=(cnt[p.team]||0)+1; });
   const cands = data.players.filter(p => p.price!=null && !owned.has(p.code) && !state.banned.has(p.code) && p.status!=='n');
   const out = [];
   cur.forEach((o,a) => {
     const po = o.p; if(state.locked.has(po.code)) return;
+    if(state.keepGk && po.pos==='GKP' && po.code===spareGk) return;
     const sell = owned.get(po.code);
     for(const p of cands){
       if(p.pos!==po.pos) continue;
@@ -1010,7 +1014,8 @@ function comboSearch(data, hz, T, sq, n, ban, nStarts){
     cands[pos] = all.filter(c=>keep.has(c));
   }
   const e0 = defExcess(sq);
-  const free = sq.map((p,a) => a).filter(a => !state.locked.has(sq[a].code));
+  const spareGk = benchGk(sq, hz);
+  const free = sq.map((p,a) => a).filter(a => !state.locked.has(sq[a].code) && !(state.keepGk && sq[a].code===spareGk));
   const evs = sl => {
     const arr = cur.slice(), usedA = new Set(), usedC = new Set(); let spend = 0, got = 0;
     for(const s_ of sl){ if(usedA.has(s_.a) || usedC.has(s_.c.p.code) || s_.c.pos!==sq[s_.a].pos) return null; usedA.add(s_.a); usedC.add(s_.c.p.code); arr[s_.a] = s_.c; spend += s_.c.price10; got += sell10[s_.a]; }
@@ -1095,7 +1100,7 @@ function renderTeam(hz, T){
   const base0 = weekly(sq0, hz).reduce((a,b)=>a+b,0), ftLeft = Math.max(0, state.ft-nm), hitSoFar = HIT*Math.max(0, nm-state.ft);
   const head = `<p class="sqnote"><b>${esc(T.name||T.label)}</b>${T.manager?`, ${esc(T.manager)}`:''}. Bank £${adjBank(T).toFixed(1)}m${state.bkadj[T.id]?` (adjusted by ${state.bkadj[T.id]>0?'+':'\u2212'}£${Math.abs(state.bkadj[T.id]).toFixed(1)}m)`:''}. Squad as of gameweek ${T.gw}${T.pending?`, with ${T.pending} transfer${T.pending>1?'s':''} already made for gameweek ${d.horizon[0]}`:''}. Free transfers are an estimate, so check the number above.</p>`;
   const R = transferOptions(d, hz, W, sq), hit = ftLeft>0 ? 0 : HIT; state.optList = R.opts;
-  const nt = state.nt, cKey = [nm, hz, nt, state.ft, [...state.banned].join(), [...state.locked].join(), state.dall, JSON.stringify(state.dcap), JSON.stringify(state.mo).length, d.generated_at, W.bank].join('|');
+  const nt = state.nt, cKey = [nm, hz, nt, state.ft, [...state.banned].join(), [...state.locked].join(), state.dall, JSON.stringify(state.dcap), state.keepGk, JSON.stringify(state.mo).length, d.generated_at, W.bank].join('|');
   if(nt>1 && (!state.combo || state.combo.key!==cKey)){
     const cb = state.combo = {key:cKey, busy:true, res:null};
     setTimeout(() => { try{ cb.res = comboTop(d, hz, W, sq, nt); }catch(e){ cb.res = []; } cb.busy = false; if(state.combo===cb && view_is_squad()) renderSquad(); }, 30);
