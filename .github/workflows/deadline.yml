@@ -1,0 +1,27 @@
+name: Update before the deadline
+
+# Starts the update workflow about an hour before every FPL deadline, so news, prices and squads are fresh when it matters.
+# It ticks every 10 minutes and almost always does nothing (a few seconds, no model run).
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch: {}
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Start update if a deadline is about an hour away
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: python scripts/deadline_gate.py
