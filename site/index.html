@@ -595,6 +595,7 @@ function detail(p){
    Solved by randomised restarts + best-improvement swaps over a pruned candidate list; tests/exact_squad.py compares it with an exact MILP (gap well under 1%). */
 const MINXI = {DEF:3, MID:2, FWD:1};
 const BENCH_W = 0.1;
+const BENCH_ORD = [1.6, 0.9, 0.5];           // first sub is called on far more often than the third, so each place down the bench counts for less (average stays near 1)
 const BANK_W = 0.3;                         // points per £1m left in the bank, a tie-breaker only
 const GK_BENCH = 0.2;                        // the spare keeper only plays if the first choice is out (a few % of weeks), so he is worth far less than an outfield sub
 function lineupScore(sq, E, hz, bw){
@@ -611,7 +612,7 @@ function lineupScore(sq, E, hz, bw){
       for(let j=0;j<a.length;j++){ if(j<MINXI[k]){ xi+=a[j]; if(a[j]>cap) cap=a[j]; } else rest.push(a[j]); }
     }
     rest.sort((a,b)=>b-a);
-    for(let j=0;j<rest.length;j++){ if(j<4){ xi+=rest[j]; if(rest[j]>cap) cap=rest[j]; } else bench+=rest[j]; }
+    for(let j=0;j<rest.length;j++){ if(j<4){ xi+=rest[j]; if(rest[j]>cap) cap=rest[j]; } else bench+=rest[j]*(BENCH_ORD[j-4]===undefined?BENCH_ORD[2]:BENCH_ORD[j-4]); }
     tot += xi + cap + bw*bench + bw*GK_BENCH*gb;
   }
   return tot;
