@@ -49,10 +49,14 @@ def build_team(entry_id: int, label: str, gw0: int, id2code: dict[int, int], now
     last = gw0 - 1
     if last < 1:
         raise RuntimeError("season has not started: no picks yet")
+    # a free hit squad is not kept: the team (and bank) go back to the gameweek before, and its purchases do not count
+    fh = {c["event"] for c in hist.get("chips", []) if c.get("name") == "freehit" and c["event"] != gw0}
+    while last in fh and last > 1:
+        last -= 1
     picks = get(f"entry/{entry_id}/event/{last}/picks/")
     squad = [p["element"] for p in picks["picks"]]
     bank = picks["entry_history"]["bank"] / 10.0
-    tr = sorted(transfers, key=lambda t: t["time"])
+    tr = sorted((t for t in transfers if t["event"] not in fh), key=lambda t: t["time"])
     pending = [t for t in tr if t["event"] == gw0]
     for t in pending:                                # transfers already made for the upcoming gameweek
         if t["element_out"] in squad:

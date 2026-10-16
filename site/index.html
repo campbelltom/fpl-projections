@@ -385,6 +385,7 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
       <div class="sqctl">
         <label class="wide">Start from<select id="sq-team" aria-label="Start from"></select></label>
         <label id="b-lab">Budget<span class="stp"><button type="button" id="b-dn" aria-label="Lower budget">&minus;</button><output id="b-out"></output><button type="button" id="b-up" aria-label="Raise budget">+</button></span></label>
+        <label id="bk-lab" hidden>Bank<span class="stp"><button type="button" id="bk-dn" aria-label="Lower bank">&minus;</button><output id="bk-out"></output><button type="button" id="bk-up" aria-label="Raise bank">+</button></span></label>
         <label id="ft-lab" hidden>Free transfers<span class="stp"><button type="button" id="ft-dn" aria-label="Fewer free transfers">&minus;</button><output id="ft-out"></output><button type="button" id="ft-up" aria-label="More free transfers">+</button></span></label>
         <label>Horizon<select id="sq-hz" aria-label="Gameweeks counted"></select></label>
         <button type="button" id="sq-build" class="primary">Build best squad</button>
@@ -421,7 +422,7 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
 const $ = s => document.querySelector(s);
 const POS = ['All','GKP','DEF','MID','FWD'];
 let DEF_HZ = 8;
-const state = {pos:'All', team:'', q:'', hz:8, avail:false, sort:'total', open:null, pmin:0, pmax:99, lo:0, hi:99, data:null, intro:true, vbase:'starter', view:'players', mine:-1, ft:1, plan:null, sel:null, budget:100, locked:new Set(), banned:new Set(), squad:null, srow:null, opt:null, wc:null, wcg:null, wcv:'fh', lug:0, luo:new Set(), rpl:null, repq:'', mo:{}, mp:null, mw:null, moves:[], optList:[], dall:3, dcap:{}, nt:1, combo:null, copen:null};
+const state = {pos:'All', team:'', q:'', hz:8, avail:false, sort:'total', open:null, pmin:0, pmax:99, lo:0, hi:99, data:null, intro:true, vbase:'starter', view:'players', mine:-1, ft:1, plan:null, sel:null, budget:100, locked:new Set(), banned:new Set(), squad:null, srow:null, opt:null, wc:null, wcg:null, wcv:'fh', lug:0, luo:new Set(), rpl:null, repq:'', mo:{}, mp:null, mw:null, moves:[], optList:[], dall:3, dcap:{}, nt:1, combo:null, copen:null, bkadj:{}};
 const store = {
   get(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } },
   set(k,v){ try{ localStorage.setItem(k,v); }catch(e){} },
@@ -478,7 +479,7 @@ const f1 = x => x.toFixed(1);
 
 function start(d){
   DEF_HZ = Math.min(8, d.horizon.length); d.hall = d.horizon.slice(); d.horizon = d.hall.slice(0, DEF_HZ);   // the data runs 16 weeks so the wildcard solver sees far enough; only the first 8 are shown
-  state.data = d; state.hz = DEF_HZ; loadLimits(); moInit(d); moBar();
+  state.data = d; state.hz = DEF_HZ; loadLimits(); loadBank(); moInit(d); moBar();
   const pr = d.players.map(p => p.price).filter(x => x != null);
   state.lo = state.pmin = Math.floor(Math.min(...pr)*10)/10; state.hi = state.pmax = Math.ceil(Math.max(...pr)*10)/10;
   $('#lock').hidden = true; $('#app').hidden = false;
@@ -920,6 +921,8 @@ const horizonLabel = hz => hz===1 ? 'the next gameweek' : hz+' gameweeks';
 const MEDNOTE = 'A red or amber plus marks a player who is injured, suspended or doubtful: his projection already allows for missed games, but injury news changes fast, so check before acting.';
 function curTeam(){ return state.mine>=0 ? state.data.teams[state.mine] : null; }
 
+function loadBank(){ try{ state.bkadj = JSON.parse(store.get('fpl-bkadj')||'{}') || {}; }catch(e){ state.bkadj = {}; } }
+const adjBank = T => Math.round((T.bank + (state.bkadj[T.id]||0))*10)/10;
 function loadLimits(){ try{ const v = JSON.parse(store.get('fpl-dlim')||'null'); if(v){ state.dall = [1,2,3].includes(v.all)?v.all:3; state.dcap = v.cap||{}; } }catch(e){} }
 function saveLimits(){ store.set('fpl-dlim', JSON.stringify({all:state.dall, cap:state.dcap})); }
 function renderLimits(){
@@ -941,6 +944,7 @@ function renderSquad(){
   const d = state.data, hz = +$('#sq-hz').value || d.horizon.length, T = curTeam();
   $('#b-out').textContent = '£' + state.budget.toFixed(1) + 'm';
   $('#ft-out').textContent = state.ft;
+  $('#bk-lab').hidden = !T; if(T && !T.error) $('#bk-out').textContent = '£' + adjBank(T).toFixed(1) + 'm';
   $('#b-lab').hidden = !!T; $('#ft-lab').hidden = !T;
   $('#sq-build').hidden = !!T; $('#sq-build').textContent = 'Build best squad';
   if(T){ return renderTeam(hz, T); }
@@ -1057,7 +1061,7 @@ function comboSearch(data, hz, T, sq, n){
   return res.map(r => ({gain:r.gain, gain1:r.gain1, left:r.left, moves:r.sl.map(x => ({out:sq[x.a], inn:x.c.p, sell:sell10[x.a]/10}))}));
 }
 function workTeam(T){
-  const by = new Map(state.data.players.map(p=>[p.code,p])), m = new Map(T.squad.map(x=>[x.code,x.sell])); let bank = T.bank;
+  const by = new Map(state.data.players.map(p=>[p.code,p])), m = new Map(T.squad.map(x=>[x.code,x.sell])); let bank = adjBank(T);
   for(const mv of state.moves){ const sell = m.get(mv.o), pin = by.get(mv.i); if(sell==null||!pin) continue; m.delete(mv.o); m.set(mv.i, pin.price); bank = Math.round((bank+sell-pin.price)*10)/10; }
   return {squad:[...m].map(([code,sell])=>({code,sell})), bank};
 }
@@ -1070,9 +1074,9 @@ function renderTeam(hz, T){
   const W = workTeam(T), sq = W.squad.map(x=>by.get(x.code)), nm = state.moves.length;
   const owned = new Set(T.squad.map(x=>x.code)), L = lineupHTML(sq, hz, owned);
   const base0 = weekly(sq0, hz).reduce((a,b)=>a+b,0), ftLeft = Math.max(0, state.ft-nm), hitSoFar = HIT*Math.max(0, nm-state.ft);
-  const head = `<p class="sqnote"><b>${esc(T.name||T.label)}</b>${T.manager?`, ${esc(T.manager)}`:''}. Bank £${T.bank.toFixed(1)}m. Squad as of gameweek ${T.gw}${T.pending?`, with ${T.pending} transfer${T.pending>1?'s':''} already made for gameweek ${d.horizon[0]}`:''}. Free transfers are an estimate, so check the number above.</p>`;
+  const head = `<p class="sqnote"><b>${esc(T.name||T.label)}</b>${T.manager?`, ${esc(T.manager)}`:''}. Bank £${adjBank(T).toFixed(1)}m${state.bkadj[T.id]?` (adjusted by ${state.bkadj[T.id]>0?'+':'\u2212'}£${Math.abs(state.bkadj[T.id]).toFixed(1)}m)`:''}. Squad as of gameweek ${T.gw}${T.pending?`, with ${T.pending} transfer${T.pending>1?'s':''} already made for gameweek ${d.horizon[0]}`:''}. Free transfers are an estimate, so check the number above.</p>`;
   const R = transferOptions(d, hz, W, sq), hit = ftLeft>0 ? 0 : HIT; state.optList = R.opts;
-  const nt = state.nt, cKey = [nm, hz, nt, state.ft, [...state.banned].join(), [...state.locked].join(), state.dall, JSON.stringify(state.dcap), JSON.stringify(state.mo).length, d.generated_at].join('|');
+  const nt = state.nt, cKey = [nm, hz, nt, state.ft, [...state.banned].join(), [...state.locked].join(), state.dall, JSON.stringify(state.dcap), JSON.stringify(state.mo).length, d.generated_at, W.bank].join('|');
   if(nt>1 && (!state.combo || state.combo.key!==cKey)){
     const cb = state.combo = {key:cKey, busy:true, res:null};
     setTimeout(() => { try{ cb.res = comboSearch(d, hz, W, sq, nt); }catch(e){ cb.res = []; } cb.busy = false; if(state.combo===cb && view_is_squad()) renderSquad(); }, 30);
@@ -1272,6 +1276,7 @@ document.addEventListener('click', ev => {
   else if(b.dataset.undo){ const k=state.moves.findIndex(m=>m.i===+b.dataset.undo); if(k>=0) state.moves=state.moves.slice(0,k); state.opt=null; state.srow=null; renderSquad(); }
   else if(b.id==='wi-reset'){ state.moves=[]; state.opt=null; state.srow=null; renderSquad(); }
   else if(b.dataset.opt){ const i=+b.dataset.opt; state.opt = state.opt===i?null:i; renderSquad(); }
+  else if(b.id==='bk-dn' || b.id==='bk-up'){ const T=curTeam(); if(T){ const v = Math.round(((state.bkadj[T.id]||0) + (b.id==='bk-up'?0.1:-0.1))*10)/10; if(v) state.bkadj[T.id]=v; else delete state.bkadj[T.id]; store.set('fpl-bkadj', JSON.stringify(state.bkadj)); state.wc=null; state.combo=null; renderSquad(); } }
   else if(b.id==='ft-dn'){ state.ft=Math.max(0,state.ft-1); renderSquad(); }
   else if(b.id==='ft-up'){ state.ft=Math.min(5,state.ft+1); renderSquad(); }
   else if(b.id==='b-dn'){ state.budget=Math.max(80,+(state.budget-0.5).toFixed(1)); state.squad=null; renderSquad(); }
