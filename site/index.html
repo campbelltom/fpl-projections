@@ -162,6 +162,9 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
 .lim .lr{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:6px 0}
 .lim select{font:inherit;padding:4px 6px}
 .lim .chip{border:1px solid var(--line,#8884);border-radius:99px;background:none;color:inherit;padding:2px 10px;font:inherit;cursor:pointer}
+.tht{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.nts{display:flex;align-items:center;gap:6px;font:600 .72rem var(--body);color:var(--ink2)}.nts select{font:inherit;padding:3px 6px}
+.to.co .tl{display:flex;flex-direction:column;gap:6px}.to.co .cl{display:flex;flex-direction:column;gap:1px}
 .sqctl{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;margin:4px 0 10px}
 .sqctl label{display:flex;flex-direction:column;gap:3px;font:600 .75rem var(--body);color:var(--ink2)}
 .sqctl select{height:40px;border:0;border-radius:12px;background:var(--card);padding:0 10px;font-size:16px;color:var(--ink)}
@@ -418,7 +421,7 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
 const $ = s => document.querySelector(s);
 const POS = ['All','GKP','DEF','MID','FWD'];
 let DEF_HZ = 8;
-const state = {pos:'All', team:'', q:'', hz:8, avail:false, sort:'total', open:null, pmin:0, pmax:99, lo:0, hi:99, data:null, intro:true, vbase:'starter', view:'players', mine:-1, ft:1, plan:null, sel:null, budget:100, locked:new Set(), banned:new Set(), squad:null, srow:null, opt:null, wc:null, wcg:null, wcv:'fh', lug:0, luo:new Set(), rpl:null, repq:'', mo:{}, mp:null, mw:null, moves:[], optList:[], dall:3, dcap:{}};
+const state = {pos:'All', team:'', q:'', hz:8, avail:false, sort:'total', open:null, pmin:0, pmax:99, lo:0, hi:99, data:null, intro:true, vbase:'starter', view:'players', mine:-1, ft:1, plan:null, sel:null, budget:100, locked:new Set(), banned:new Set(), squad:null, srow:null, opt:null, wc:null, wcg:null, wcv:'fh', lug:0, luo:new Set(), rpl:null, repq:'', mo:{}, mp:null, mw:null, moves:[], optList:[], dall:3, dcap:{}, nt:1, combo:null, copen:null};
 const store = {
   get(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } },
   set(k,v){ try{ localStorage.setItem(k,v); }catch(e){} },
@@ -928,7 +931,7 @@ function renderLimits(){
     <div class="sqnote">Applies to the squad builder, wildcard, free hit, replacements and suggested transfers. Goalkeepers count with defenders; midfielders and forwards are not capped beyond the game's three-per-club rule.</div>`;
 }
 function limChanged(){ saveLimits(); state.wc = null; renderSquad(); }
-document.addEventListener('change', ev => { if(ev.target.id==='lim-all'){ state.dall = +ev.target.value; limChanged(); } });
+document.addEventListener('change', ev => { if(ev.target.id==='nt'){ state.nt = +ev.target.value; state.copen = null; state.opt = null; renderSquad(); return; } if(ev.target.id==='lim-all'){ state.dall = +ev.target.value; limChanged(); } });
 document.addEventListener('click', ev => {
   if(ev.target.id==='lim-set'){ state.dcap[$('#lim-club').value] = +$('#lim-n').value; limChanged(); }
   const x = ev.target.closest('button[data-limx]'); if(x){ delete state.dcap[x.dataset.limx]; limChanged(); }
@@ -978,6 +981,81 @@ function transferOptions(data, hz, T, sq){
   out.sort((x,y)=>y.gain-x.gain);
   return {base, opts:out.slice(0,NOPT), total:out.length};
 }
+
+/* Best set of N transfers made together (N = 2 to 5). Local search over (player out, player in) slots with a penalty for overspending,
+   from several starting points; a set is only kept if every transfer in it is needed (dropping any one costs real points). */
+function comboSearch(data, hz, T, sq, n){
+  const owned = new Map(T.squad.map(x => [x.code, x.sell]));
+  const E = data.players.map(p => p.ep.slice(0,hz)), idx = new Map(data.players.map((p,k)=>[p.code,k]));
+  const ob = p => ({pos:p.pos, k:idx.get(p.code), p});
+  const cur = sq.map(ob), base = lineupScore(cur, E, hz, 0), base1 = lineupScore(cur, E, 1, 0);
+  const bank10 = Math.round(T.bank*10), sell10 = sq.map(p => Math.round(owned.get(p.code)*10));
+  const cands = {}, pool = data.players.filter(p => p.price!=null && !owned.has(p.code) && !state.banned.has(p.code) && p.status!=='n');
+  for(const pos of ['GKP','DEF','MID','FWD']){
+    const all = pool.filter(p=>p.pos===pos).map(p => Object.assign(ob(p), {price10:Math.round(p.price*10), tot:sum(p.ep,hz), team:p.team}));
+    all.sort((a,b)=>b.tot-a.tot);
+    const lo = Math.min(...all.map(c=>c.price10)), keep = new Set(all.slice(0,45)); all.filter(c=>c.price10<=lo+12).slice(0,25).forEach(c=>keep.add(c));
+    cands[pos] = all.filter(c=>keep.has(c));
+  }
+  const free = sq.map((p,a) => a).filter(a => !state.locked.has(sq[a].code));
+  const evs = sl => {
+    const arr = cur.slice(), usedA = new Set(), usedC = new Set(); let spend = 0, got = 0;
+    for(const s_ of sl){ if(usedA.has(s_.a) || usedC.has(s_.c.p.code) || s_.c.pos!==sq[s_.a].pos) return null; usedA.add(s_.a); usedC.add(s_.c.p.code); arr[s_.a] = s_.c; spend += s_.c.price10; got += sell10[s_.a]; }
+    const cnt = {}, dc = {};
+    for(const o of arr){ cnt[o.p.team] = (cnt[o.p.team]||0)+1; if(isDef(o.pos)) dc[o.p.team] = (dc[o.p.team]||0)+1; }
+    for(const t in cnt) if(cnt[t]>3 || (dc[t]||0)>capFor(t)) return null;
+    const deficit = Math.max(0, spend - got - bank10), gain = lineupScore(arr, E, hz, 0) - base;
+    return {gain, deficit, val: gain - 0.5*deficit, arr};
+  };
+  const seen = new Map();
+  const finish = sl => {
+    const r = evs(sl); if(!r || r.deficit>0) return;
+    const gain1 = lineupScore(r.arr, E, 1, 0) - base1; if(gain1 <= 0.005) return;
+    for(let i=0;i<sl.length;i++){ const r2 = evs(sl.filter((_,j)=>j!==i)); if(r2 && r2.deficit===0 && r2.gain > r.gain - 0.15) return; }   // a transfer that adds nothing
+    const key = sl.map(x=>x.a).sort().join(',')+'|'+sl.map(x=>x.c.p.code).sort().join(',');   // same players out and in, whichever way they are paired
+    if(!seen.has(key)) seen.set(key, {sl:sl.slice().sort((x,y)=>x.a-y.a), gain:r.gain, gain1, left:(bank10 + sl.reduce((t,x)=>t+sell10[x.a]-x.c.price10,0))/10});
+  };
+  const bestMove = (sl, fixedLen) => {
+    let best = null, bv = -1e9; const cv = evs(sl); const start = sl.length ? (cv ? cv.val : -1e9) : -1e9;
+    for(let i=0;i<=sl.length;i++){
+      if(i===sl.length && sl.length>=fixedLen) break;
+      for(const a of free){
+        for(const c of cands[sq[a].pos]){
+          const t = sl.slice(); if(i===sl.length) t.push({a,c}); else t[i] = {a,c};
+          const r = evs(t); if(r && r.val>bv){ bv = r.val; best = t; }
+        }
+      }
+    }
+    return {best, bv, start};
+  };
+  const polish = sl => {
+    for(let it=0; it<12; it++){
+      const m = bestMove(sl, n);
+      if(m.best && m.bv > m.start + 1e-6){ sl = m.best; continue; }
+      let imp = null, iv = m.start;                                   // pair moves: two ins change together (a star paid for by another sale)
+      for(let i=0;i<sl.length && !imp;i++) for(let j=i+1;j<sl.length;j++){
+        for(const c1 of cands[sq[sl[i].a].pos].slice(0,40)) for(const c2 of cands[sq[sl[j].a].pos].slice(0,40)){
+          const t = sl.slice(); t[i] = {a:sl[i].a, c:c1}; t[j] = {a:sl[j].a, c:c2}; const r = evs(t); if(r && r.val > iv + 1e-6){ iv = r.val; imp = t; }
+        } }
+      if(imp){ sl = imp; continue; }
+      break;
+    }
+    return sl;
+  };
+  // starting points: greedy builds that begin from each of the best few single moves
+  const first = [];
+  for(const a of free) for(const c of cands[sq[a].pos]){ const r = evs([{a,c}]); if(r) first.push({sl:[{a,c}], v:r.val}); }
+  first.sort((x,y)=>y.v-x.v);
+  const starts = first.slice(0, 7);
+  for(const st of starts){
+    let sl = st.sl;
+    while(sl.length<n){ const m = bestMove(sl, n); if(!m.best) break; sl = m.best; }
+    if(sl.length<n) continue;
+    finish(polish(sl));
+  }
+  const res = [...seen.values()].sort((x,y)=>y.gain-x.gain).slice(0,5);
+  return res.map(r => ({gain:r.gain, gain1:r.gain1, left:r.left, moves:r.sl.map(x => ({out:sq[x.a], inn:x.c.p, sell:sell10[x.a]/10}))}));
+}
 function workTeam(T){
   const by = new Map(state.data.players.map(p=>[p.code,p])), m = new Map(T.squad.map(x=>[x.code,x.sell])); let bank = T.bank;
   for(const mv of state.moves){ const sell = m.get(mv.o), pin = by.get(mv.i); if(sell==null||!pin) continue; m.delete(mv.o); m.set(mv.i, pin.price); bank = Math.round((bank+sell-pin.price)*10)/10; }
@@ -994,6 +1072,11 @@ function renderTeam(hz, T){
   const base0 = weekly(sq0, hz).reduce((a,b)=>a+b,0), ftLeft = Math.max(0, state.ft-nm), hitSoFar = HIT*Math.max(0, nm-state.ft);
   const head = `<p class="sqnote"><b>${esc(T.name||T.label)}</b>${T.manager?`, ${esc(T.manager)}`:''}. Bank £${T.bank.toFixed(1)}m. Squad as of gameweek ${T.gw}${T.pending?`, with ${T.pending} transfer${T.pending>1?'s':''} already made for gameweek ${d.horizon[0]}`:''}. Free transfers are an estimate, so check the number above.</p>`;
   const R = transferOptions(d, hz, W, sq), hit = ftLeft>0 ? 0 : HIT; state.optList = R.opts;
+  const nt = state.nt, cKey = [nm, hz, nt, state.ft, [...state.banned].join(), [...state.locked].join(), state.dall, JSON.stringify(state.dcap), JSON.stringify(state.mo).length, d.generated_at].join('|');
+  if(nt>1 && (!state.combo || state.combo.key!==cKey)){
+    const cb = state.combo = {key:cKey, busy:true, res:null};
+    setTimeout(() => { try{ cb.res = comboSearch(d, hz, W, sq, nt); }catch(e){ cb.res = []; } cb.busy = false; if(state.combo===cb && view_is_squad()) renderSquad(); }, 30);
+  }
   const sg2 = x => (x>=0?'+':'\u2212')+Math.abs(x).toFixed(1);
   const before = weekly(sq, hz);
   const rows = R.opts.map((o,i) => {
@@ -1010,9 +1093,31 @@ function renderTeam(hz, T){
       <span class="ot"><em>OUT</em><b>${esc(o.out.name)}</b> <small>${o.out.team} £${o.sell.toFixed(1)}m</small></span></span>
       <span class="tg"><b>${sg2(o.gain)}</b>${hit?`<small>${sg2(o.gain-hit)} after hit</small>`:`<small>${sg2(o.gain1)} in GW ${d.horizon[0]}</small>`}</span></button>${det}</div>`;
   }).join('');
-  const lst = R.opts.length
-    ? `<div class="tohd"><b>Best ${R.opts.length} single transfers</b><span>Only moves that add points in the coming gameweek are listed; the rest can wait. ${ftLeft>0?`You have ${ftLeft} free transfer${ftLeft>1?'s':''}.`:`With no free transfer left, each costs ${HIT} points: the second figure is after that.`}</span></div>${rows}`
-    : '<div class="empty">No single transfer improves this squad within your budget and the three-per-club rule.</div>';
+  const ntSel = `<label class="nts">Transfers together<select id="nt" aria-label="How many transfers to combine">${[1,2,3,4,5].map(k=>`<option value="${k}"${k===nt?' selected':''}>${k===1?'1 (single moves)':k+' at once'}</option>`).join('')}</select></label>`;
+  const hitN = k => HIT*Math.max(0, k-ftLeft);
+  let lst;
+  if(nt===1){
+    lst = `<div class="tohd"><div class="tht"><b>${R.opts.length?`Best ${R.opts.length} single transfers`:'Single transfers'}</b>${ntSel}</div><span>Only moves that add points in the coming gameweek are listed; the rest can wait. ${ftLeft>0?`You have ${ftLeft} free transfer${ftLeft>1?'s':''}.`:`With no free transfer left, each costs ${HIT} points: the second figure is after that.`}</span></div>`
+      + (R.opts.length ? rows : '<div class="empty">No single transfer improves this squad within your budget and the three-per-club rule.</div>');
+  } else {
+    const cb = state.combo, hn = hitN(nt);
+    let body;
+    if(!cb || cb.busy) body = `<div class="empty">Working out the best ${nt} transfers together...</div>`;
+    else if(!cb.res.length) body = `<div class="empty">No set of ${nt} transfers beats your team by enough in the coming gameweek and over ${horizonLabel(hz)}, with every transfer pulling its weight. Try fewer.</div>`;
+    else body = cb.res.map((r,i) => {
+      const open = state.copen===i, net = r.gain - hn;
+      const lines = r.moves.map(m => `<span class="cl pos-${m.inn.pos}"><span class="in"><em>IN</em>${medical(m.inn)}<b>${esc(m.inn.name)}</b> <small>${m.inn.team} £${m.inn.price.toFixed(1)}m</small></span><span class="ot"><em>OUT</em><b>${esc(m.out.name)}</b> <small>${m.out.team} £${m.sell.toFixed(1)}m</small></span></span>`).join('');
+      let det = '';
+      if(open){
+        const nsq = sq.map(p => { const m = r.moves.find(x=>x.out.code===p.code); return m ? m.inn : p; }), after = weekly(nsq, hz);
+        det = `<div class="od"><div class="ow">${after.map((v,g)=>`<span><small>GW ${d.horizon[g]}</small><b class="${v-before[g]>0.005?'up':''}">${sg2(v-before[g])}</b></span>`).join('')}</div>
+          <p>Together these add ${f1(r.gain)} points over ${horizonLabel(hz)} (${sg2(r.gain1)} in GW ${d.horizon[0]}), counting only what changes in your best XI each week, captain doubled. ${hn?`${nt} transfers with ${ftLeft} free costs ${hn} points, leaving ${sg2(net)} net. `:`That is within your free transfers. `}£${r.left.toFixed(1)}m left in the bank.</p>
+          <button type="button" class="do" data-doco="${i}">Make these ${nt} transfers</button></div>`;
+      }
+      return `<div class="to co${open?' open':''}"><button type="button" class="tr" data-co="${i}" aria-expanded="${open}"><span class="tl">${lines}</span><span class="tg"><b>${sg2(r.gain)}</b><small>${hn?sg2(net)+' after hits':sg2(r.gain1)+' in GW '+d.horizon[0]}</small></span></button>${det}</div>`;
+    }).join('');
+    lst = `<div class="tohd"><div class="tht"><b>Best ${nt} transfers together</b>${ntSel}</div><span>Sets of ${nt} moves chosen jointly, so one sale can fund another signing. Every transfer in a set has to add something; each set must also add points in the coming gameweek. ${ftLeft>0?`You have ${ftLeft} free transfer${ftLeft>1?'s':''}${nt>ftLeft?`, so ${nt-ftLeft} cost${nt-ftLeft>1?'':'s'} ${HIT} points each`:''}.`:`With no free transfer left, each costs ${HIT} points.`}</span></div>${body}`;
+  }
   const wi = nm ? `<div class="wi"><div><b>${nm} transfer${nm>1?'s':''} made</b> <span>${state.moves.map(m=>`${esc(by.get(m.o).name)} to ${esc(by.get(m.i).name)}`).join(', ')}</span></div>
     <div class="wn"><span><b>${sg2(L.xiPts-base0)}</b> points</span><span><b>${hitSoFar?'\u2212'+hitSoFar:'0'}</b> hit</span><span><b>${sg2(L.xiPts-base0-hitSoFar)}</b> net</span></div>
     <button type="button" id="wi-reset">Back to my team</button></div>` : '';
@@ -1133,7 +1238,7 @@ function setView(v){
   $('#pctl').hidden = other; $('#list').hidden = other; $('#squadview').hidden = !sqv; $('#pensview').hidden = !pv; $('#lineupview').hidden = !lv; document.querySelector('.dock').hidden = other;
   if(sqv) renderSquad(); else if(pv) renderPens(); else if(lv) renderLineups(); else render();
 }
-window.FPL = {solveSquad, transferOptions, lineupScore, pickGW, state};
+window.FPL = {solveSquad, transferOptions, comboSearch, workTeam, lineupScore, pickGW, state};
 
 /* ---------- events ---------- */
 const sheet = $('#sheet');
@@ -1161,6 +1266,8 @@ document.addEventListener('click', ev => {
   else if(b.dataset.lock){ const c=+b.dataset.lock; state.locked.has(c)?state.locked.delete(c):state.locked.add(c); renderSquad(); }
   else if(b.dataset.ban){ const c=+b.dataset.ban; state.banned.add(c); state.locked.delete(c); buildSquad(); }
   else if(b.id==='wc-run'){ runWild(); }
+  else if(b.dataset.co){ const i=+b.dataset.co; state.copen = state.copen===i?null:i; renderSquad(); }
+  else if(b.dataset.doco){ const r = state.combo && state.combo.res && state.combo.res[+b.dataset.doco]; if(r){ r.moves.forEach(m => state.moves.push({o:m.out.code, i:m.inn.code})); state.opt=null; state.copen=null; state.combo=null; renderSquad(); } }
   else if(b.dataset.do){ const o=state.optList[+b.dataset.do]; if(o){ state.moves.push({o:o.out.code,i:o.inn.code}); state.opt=null; renderSquad(); } }
   else if(b.dataset.undo){ const k=state.moves.findIndex(m=>m.i===+b.dataset.undo); if(k>=0) state.moves=state.moves.slice(0,k); state.opt=null; state.srow=null; renderSquad(); }
   else if(b.id==='wi-reset'){ state.moves=[]; state.opt=null; state.srow=null; renderSquad(); }
