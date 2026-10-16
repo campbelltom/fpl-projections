@@ -157,6 +157,11 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
 
 
 .views{margin:0 0 8px}
+.lim{margin:0 0 10px;font:.8rem var(--body);color:var(--ink2)}
+.lim summary{cursor:pointer;font:600 .75rem var(--body);color:var(--ink2);padding:4px 0}
+.lim .lr{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:6px 0}
+.lim select{font:inherit;padding:4px 6px}
+.lim .chip{border:1px solid var(--line,#8884);border-radius:99px;background:none;color:inherit;padding:2px 10px;font:inherit;cursor:pointer}
 .sqctl{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;margin:4px 0 10px}
 .sqctl label{display:flex;flex-direction:column;gap:3px;font:600 .75rem var(--body);color:var(--ink2)}
 .sqctl select{height:40px;border:0;border-radius:12px;background:var(--card);padding:0 10px;font-size:16px;color:var(--ink)}
@@ -380,6 +385,7 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
         <label>Horizon<select id="sq-hz" aria-label="Gameweeks counted"></select></label>
         <button type="button" id="sq-build" class="primary">Build best squad</button>
       </div>
+      <details class="lim" id="lim"><summary>Club limits</summary><div id="limbody"></div></details>
       <div id="sqout"></div>
     </section>
     <footer id="foot"></footer></div>
@@ -410,7 +416,7 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
 'use strict';
 const $ = s => document.querySelector(s);
 const POS = ['All','GKP','DEF','MID','FWD'];
-const state = {pos:'All', team:'', q:'', hz:8, avail:true, sort:'total', open:null, pmin:0, pmax:99, lo:0, hi:99, data:null, intro:true, vbase:'starter', view:'players', mine:-1, ft:1, plan:null, sel:null, budget:100, locked:new Set(), banned:new Set(), squad:null, srow:null, opt:null, wc:null, wcg:null, wcv:'fh', lug:0, luo:new Set(), rpl:null, repq:'', mo:{}, mp:null, mw:null, moves:[], optList:[]};
+const state = {pos:'All', team:'', q:'', hz:8, avail:true, sort:'total', open:null, pmin:0, pmax:99, lo:0, hi:99, data:null, intro:true, vbase:'starter', view:'players', mine:-1, ft:1, plan:null, sel:null, budget:100, locked:new Set(), banned:new Set(), squad:null, srow:null, opt:null, wc:null, wcg:null, wcv:'fh', lug:0, luo:new Set(), rpl:null, repq:'', mo:{}, mp:null, mw:null, moves:[], optList:[], dall:3, dcap:{}};
 const store = {
   get(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } },
   set(k,v){ try{ localStorage.setItem(k,v); }catch(e){} },
@@ -466,7 +472,7 @@ const sum = (a,n) => a.slice(0,n).reduce((x,y)=>x+y,0);
 const f1 = x => x.toFixed(1);
 
 function start(d){
-  state.data = d; state.hz = d.horizon.length; moInit(d); moBar();
+  state.data = d; state.hz = d.horizon.length; loadLimits(); moInit(d); moBar();
   const pr = d.players.map(p => p.price).filter(x => x != null);
   state.lo = state.pmin = Math.floor(Math.min(...pr)*10)/10; state.hi = state.pmax = Math.ceil(Math.max(...pr)*10)/10;
   $('#lock').hidden = true; $('#app').hidden = false;
@@ -594,6 +600,9 @@ function detail(p){
    bench. Constraints: 15 players split 2/5/5/3, budget, at most 3 per club, locked players kept, banned players excluded.
    Solved by randomised restarts + best-improvement swaps over a pruned candidate list; tests/exact_squad.py compares it with an exact MILP (gap well under 1%). */
 const MINXI = {DEF:3, MID:2, FWD:1};
+/* Optional limit on defenders from one club (all clubs, or club by club). Default is the game's own limit of three players per club. */
+const capFor = t => Math.min(3, state.dcap[t]!==undefined ? state.dcap[t] : state.dall);
+const defOver = sq => { const c = {}; for(const o of sq) if(o.pos==='DEF'){ c[o.team]=(c[o.team]||0)+1; if(c[o.team]>capFor(o.team)) return true; } return false; };
 const BENCH_W = 0.1;
 const BENCH_ORD = [1.6, 0.9, 0.5];           // first sub is called on far more often than the third, so each place down the bench counts for less (average stays near 1)
 const BANK_W = 0.3;                         // points per £1m left in the bank, a tie-breaker only
@@ -638,21 +647,21 @@ function solveSquad(data, hz, budget, locked, banned, restarts, owned){
   let best = null, bestS = -1;
   let seed = 12345; const rnd = () => (seed = (seed*1664525+1013904223)>>>0)/4294967296;
   for(let r=0; r<restarts; r++){
-    const sq = []; const cnt = {}; let spent = 0; let ok = true;
+    const sq = []; const cnt = {}, dcnt = {}; let spent = 0; let ok = true;
     const lockedObjs = pool.filter(o => locked.has(o.code));
-    for(const o of lockedObjs){ sq.push(o); cnt[o.team]=(cnt[o.team]||0)+1; spent+=o.price; }
+    for(const o of lockedObjs){ sq.push(o); cnt[o.team]=(cnt[o.team]||0)+1; if(o.pos==='DEF') dcnt[o.team]=(dcnt[o.team]||0)+1; spent+=o.price; }
     const slots = []; for(const pos in need){ const have = lockedObjs.filter(o=>o.pos===pos).length; for(let j=have;j<need[pos];j++) slots.push(pos); }
     slots.sort(()=>rnd()-.5);
     for(let si=0; si<slots.length; si++){
       const pos = slots[si], remaining = slots.slice(si+1);
       const reserve = remaining.reduce((t,q)=>t+cheapest[q],0);
-      const cand = byPos[pos].filter(o => !sq.includes(o) && (cnt[o.team]||0)<3 && spent+o.price+reserve<=B);
+      const cand = byPos[pos].filter(o => !sq.includes(o) && (cnt[o.team]||0)<3 && (o.pos!=='DEF' || (dcnt[o.team]||0)<capFor(o.team)) && spent+o.price+reserve<=B);
       if(!cand.length){ ok=false; break; }
       // even restarts: random pick biased to the best players; odd restarts: premium stars first, then best points-per-pound fill
       const stars = r%2===1 && si < (r%8===1?1:r%8===3?2:r%8===5?3:0);
       if(stars) cand.sort((a,b)=>b.tot-a.tot); else if(r%2===1) cand.sort((a,b)=>b.tot/b.price-a.tot/a.price); else cand.sort((a,b)=>b.tot-a.tot);
       const o = cand[Math.floor(rnd()*rnd()*Math.min(cand.length,stars?6:25))];
-      sq.push(o); cnt[o.team]=(cnt[o.team]||0)+1; spent+=o.price;
+      sq.push(o); cnt[o.team]=(cnt[o.team]||0)+1; if(o.pos==='DEF') dcnt[o.team]=(dcnt[o.team]||0)+1; spent+=o.price;
     }
     if(!ok) continue;
     let cur = score(sq);
@@ -663,21 +672,21 @@ function solveSquad(data, hz, budget, locked, banned, restarts, owned){
         const sp = spent - out.price;
         for(const o of byPos[out.pos]){
           if(o===out || sq.includes(o) || sp+o.price>B) continue;
-          if(o.team!==out.team && (cnt[o.team]||0)>=3) continue;
+          if(o.team!==out.team && ((cnt[o.team]||0)>=3 || (o.pos==='DEF' && (dcnt[o.team]||0)>=capFor(o.team)))) continue;
           sq[a]=o; const v = score(sq); sq[a]=out;
           if(v>mv){ mv=v; move=[a,o]; }
         }
       }
       if(!move) break;
       const [a,o]=move, out=sq[a];
-      cnt[out.team]--; cnt[o.team]=(cnt[o.team]||0)+1; spent += o.price-out.price; sq[a]=o; cur = mv;
+      cnt[out.team]--; cnt[o.team]=(cnt[o.team]||0)+1; if(o.pos==='DEF'){ dcnt[out.team]--; dcnt[o.team]=(dcnt[o.team]||0)+1; } spent += o.price-out.price; sq[a]=o; cur = mv;
     }
     if(cur>bestS){ bestS=cur; best=sq.slice(); }
   }
   if(!best) return null;
   // polish: pair swaps (two players change at once) escape the budget-coupled local optima single swaps cannot
   const short = {}; for(const pos in need) short[pos] = byPos[pos].slice(0,34);
-  const feas = sq => { const c={}; let sp=0; for(const o of sq){ c[o.team]=(c[o.team]||0)+1; sp+=o.price; if(c[o.team]>3) return false; } return sp<=B; };
+  const feas = sq => { const c={}; let sp=0; for(const o of sq){ c[o.team]=(c[o.team]||0)+1; sp+=o.price; if(c[o.team]>3) return false; } return sp<=B && !defOver(sq); };
   for(let round=0; round<8; round++){
     let move=null, mv=bestS+1e-9;
     for(let a=0;a<best.length;a++){ if(locked.has(best[a].code)) continue;
@@ -720,9 +729,11 @@ function repPicker(p, sq, hz, ownedSet){
   const inSq = new Set(sq.map(x=>x.code)), cnt = {}; sq.forEach(x => { if(x.code!==p.code) cnt[x.team]=(cnt[x.team]||0)+1; });
   const E = d.players.map(x => x.ep.slice(0,hz)), idx = new Map(d.players.map((x,k)=>[x.code,k]));
   const ob = x => ({pos:x.pos, k:idx.get(x.code), p:x}), cur = sq.map(ob), base = lineupScore(cur, E, hz, 0), a = sq.findIndex(x=>x.code===p.code);
+  const dc = {}; sq.forEach(x => { if(x.code!==p.code && x.pos==='DEF') dc[x.team]=(dc[x.team]||0)+1; });
+  const dlim = x => x.pos==='DEF' && (dc[x.team]||0) >= capFor(x.team);
   const q = state.repq.trim().toLowerCase();
   let c = d.players.filter(x => x.pos===p.pos && x.price!=null && !inSq.has(x.code) && x.status!=='n' && (!q || x.name.toLowerCase().includes(q) || x.team.toLowerCase()===q));
-  c = c.map(x => { const w = cur.slice(); w[a] = ob(x); return {x, gain: lineupScore(w,E,hz,0)-base, ok: x.price <= room+1e-9 && (cnt[x.team]||0) < 3, why: x.price > room+1e-9 ? 'over budget' : (cnt[x.team]||0) >= 3 ? '3 from club' : ''}; });
+  c = c.map(x => { const w = cur.slice(); w[a] = ob(x); return {x, gain: lineupScore(w,E,hz,0)-base, ok: x.price <= room+1e-9 && (cnt[x.team]||0) < 3 && !dlim(x), why: x.price > room+1e-9 ? 'over budget' : (cnt[x.team]||0) >= 3 ? '3 from club' : dlim(x) ? 'defender limit' : ''}; });
   c.sort((u,v) => (v.ok-u.ok) || v.gain-u.gain);
   const list = c.slice(0, q ? 40 : 25).map(r => `<button type="button" class="rp${r.ok?'':' no'}" data-pick="${r.x.code}" ${r.ok?'':'disabled'}><span class="rn">${esc(r.x.name)}${medical(r.x)}</span><span class="rm">${r.x.team} £${r.x.price.toFixed(1)}</span><span class="rt">${r.ok ? f1(sum(r.x.ep,hz)) : r.why}</span><b class="${r.gain>=0?'up':'dn'}">${r.ok ? (r.gain>=0?'+':'\u2212')+Math.abs(r.gain).toFixed(1) : ''}</b></button>`).join('');
   return `<div class="rpk"><div class="rph"><input id="rep-q" type="search" placeholder="Search ${p.pos} by name or club" value="${esc(state.repq)}" aria-label="Search replacements" autocomplete="off"><span>Up to £${room.toFixed(1)}m</span></div><div class="rpl">${list||'<div class="empty">No players match.</div>'}</div>
@@ -902,7 +913,24 @@ const horizonLabel = hz => hz===1 ? 'the next gameweek' : hz+' gameweeks';
 const MEDNOTE = 'A red or amber plus marks a player who is injured, suspended or doubtful: his projection already allows for missed games, but injury news changes fast, so check before acting.';
 function curTeam(){ return state.mine>=0 ? state.data.teams[state.mine] : null; }
 
+function loadLimits(){ try{ const v = JSON.parse(store.get('fpl-dlim')||'null'); if(v){ state.dall = [1,2,3].includes(v.all)?v.all:3; state.dcap = v.cap||{}; } }catch(e){} }
+function saveLimits(){ store.set('fpl-dlim', JSON.stringify({all:state.dall, cap:state.dcap})); }
+function renderLimits(){
+  const teams = [...new Set(state.data.players.map(p=>p.team))].sort(), n = Object.keys(state.dcap).length;
+  const opt = (v,cur) => [1,2,3].map(k=>`<option value="${k}"${k===cur?' selected':''}>${k}</option>`).join('');
+  $('#lim').querySelector('summary').textContent = 'Club limits' + (state.dall<3||n ? ' (on)' : '');
+  $('#limbody').innerHTML = `<div class="lr"><span>Most defenders from one club:</span><select id="lim-all" aria-label="Most defenders from any club">${opt(0,state.dall)}</select><span>(3 is the game's own limit)</span></div>
+    <div class="lr"><span>Club by club:</span><select id="lim-club" aria-label="Club">${teams.map(t=>`<option>${t}</option>`).join('')}</select><select id="lim-n" aria-label="Most defenders">${opt(0,2)}</select><button type="button" class="chip" id="lim-set">Set</button>${Object.keys(state.dcap).sort().map(t=>`<button type="button" class="chip" data-limx="${t}" title="Remove">${t} max ${state.dcap[t]} \u00d7</button>`).join('')}</div>
+    <div class="sqnote">Applies to the squad builder, wildcard, free hit, replacements and suggested transfers. It is a cap on defenders only; the three-per-club rule always applies.</div>`;
+}
+function limChanged(){ saveLimits(); state.wc = null; renderSquad(); }
+document.addEventListener('change', ev => { if(ev.target.id==='lim-all'){ state.dall = +ev.target.value; limChanged(); } });
+document.addEventListener('click', ev => {
+  if(ev.target.id==='lim-set'){ state.dcap[$('#lim-club').value] = +$('#lim-n').value; limChanged(); }
+  const x = ev.target.closest('button[data-limx]'); if(x){ delete state.dcap[x.dataset.limx]; limChanged(); }
+});
 function renderSquad(){
+  renderLimits();
   const d = state.data, hz = +$('#sq-hz').value || d.horizon.length, T = curTeam();
   $('#b-out').textContent = '£' + state.budget.toFixed(1) + 'm';
   $('#ft-out').textContent = state.ft;
@@ -925,7 +953,7 @@ function transferOptions(data, hz, T, sq){
   const idx = new Map(data.players.map((p,k)=>[p.code,k]));
   const ob = p => ({pos:p.pos, k:idx.get(p.code), p});
   const cur = sq.map(ob), base = lineupScore(cur, E, hz, 0), base1 = lineupScore(cur, E, 1, 0);
-  const bank = T.bank, cnt = {}; sq.forEach(p => cnt[p.team]=(cnt[p.team]||0)+1);
+  const bank = T.bank, cnt = {}, dc = {}; sq.forEach(p => { cnt[p.team]=(cnt[p.team]||0)+1; if(p.pos==='DEF') dc[p.team]=(dc[p.team]||0)+1; });
   const cands = data.players.filter(p => p.price!=null && !owned.has(p.code) && !state.banned.has(p.code) && p.status!=='n');
   const out = [];
   cur.forEach((o,a) => {
@@ -935,6 +963,7 @@ function transferOptions(data, hz, T, sq){
       if(p.pos!==po.pos) continue;
       if(p.price > bank + sell + 1e-9) continue;
       if(p.team!==po.team && (cnt[p.team]||0) >= 3) continue;
+      if(p.pos==='DEF' && p.team!==po.team && (dc[p.team]||0) >= capFor(p.team)) continue;
       const q = cur.slice(); q[a] = ob(p);
       const gain1 = lineupScore(q, E, 1, 0) - base1;          // it has to pay off in the coming gameweek, or it can wait
       if(gain1 <= 0.005) continue;
@@ -993,7 +1022,7 @@ function wcCtx(){
   const by = new Map(state.data.players.map(p=>[p.code,p])), sq = W.squad.map(x=>by.get(x.code));
   const owned = new Map(W.squad.map(x=>[x.code,x.sell]));
   const B = Math.round((W.bank + W.squad.reduce((t,x)=>t+x.sell,0))*10)/10;
-  const key = [hz, B, W.squad.map(x=>x.code).sort().join(','), [...state.banned].sort().join(',')].join('|');
+  const key = [hz, B, W.squad.map(x=>x.code).sort().join(','), [...state.banned].sort().join(','), state.dall, JSON.stringify(state.dcap)].join('|');
   return {T, hz, W, sq, owned, B, key};
 }
 function runWild(){
