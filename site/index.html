@@ -291,7 +291,6 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
 .wt thead th{font:600 .68rem var(--num);color:var(--ink2);border-top:0}
 .wt small{display:block;font:600 .62rem var(--num)}.wt .up{color:var(--good,#2a9d5c)}.wt .dn{color:var(--bad)}
 .wt td.bwc{background:color-mix(in srgb,var(--warn) 22%,transparent)}
-.wt tr.bestw{background:color-mix(in srgb,var(--warn) 22%,transparent)}
 .wt u{text-decoration:none;font:700 .5rem var(--num);background:var(--warn);color:#000;border-radius:3px;padding:1px 3px;margin-left:3px}
 .wc details summary{cursor:pointer;font:600 .85rem var(--num);padding:6px 0}
 .info.pen{margin-top:6px;color:var(--ink)}
@@ -1235,14 +1234,14 @@ function wcHTML(){
   const wk = Array.from({length:H}, (_,k) => { const sqk = st.wk[k]; if(!sqk) return null; const w = weekly(sqk, hz); const e = Math.min(hz, k+H); let cum = 0; for(let h=k; h<e; h++) cum += w[h]-mine[h]; return {k, cum, per:cum/(e-k), squad:sqk}; });
   const bestWK = wk.filter(Boolean).reduce((a,b)=>!a||b.cum>a.cum?b:a, null);
   const rows = Array.from({length:H}, (_,g) => { const f = fh[g]; const best = bestFH && f && f.g===bestFH.g && !st.busy, w = wk[g], bw = bestWK && w && w.k===bestWK.k && !st.busy;
-    return `<tr data-wcg="${g}" class="${best?'bestw ':''}${state.wcg===g?'selw':''}"><th><button type="button" data-wcg="${g}" aria-pressed="${state.wcg===g}">${d.horizon[g]}${best?'<u>FH</u>':''}</button></th><td>${f1(mine[g])}</td><td>${f1(wcw[g])}<small class="${wcw[g]-mine[g]>=0?'up':'dn'}">${sg2(wcw[g]-mine[g])}</small></td><td>${f?f1(f.pts):'...'}${f?`<small class="${f.gain>=0?'up':'dn'}">${sg2(f.gain)}</small>`:''}</td><td class="${bw?'bwc':''}">${w?sg2(w.cum)+`<small class="${w.cum>=0?'up':'dn'}">${sg2(w.per)}/wk</small>`:'...'}${bw?'<u>WC</u>':''}</td></tr>`; }).join('');
+    return `<tr data-wcg="${g}" class="${state.wcg===g?'selw':''}"><th><button type="button" data-wcg="${g}" aria-pressed="${state.wcg===g}">${d.horizon[g]}</button></th><td>${f1(mine[g])}</td><td class="${best?'bwc':''}">${f?f1(f.pts):'...'}${f?`<small class="${f.gain>=0?'up':'dn'}">${sg2(f.gain)}</small>`:''}${best?'<u>FH</u>':''}</td><td class="${bw?'bwc':''}">${w?sg2(w.cum)+`<small class="${w.cum>=0?'up':'dn'}">${sg2(w.per)}/wk</small>`:'...'}${bw?'<u>WC</u>':''}</td></tr>`; }).join('');
   const out = st.wild.squad.filter(p=>!c.sq.some(q=>q.code===p.code)).map(p=>esc(p.name)), gone = c.sq.filter(p=>!st.wild.squad.some(q=>q.code===p.code)).map(p=>esc(p.name));
   const L = lineupHTML(st.wild.squad, H, new Set(c.sq.map(p=>p.code)), true);
   return `<div class="wc"><div class="wh"><b>Wildcard and free hit</b><span>Budget £${c.B.toFixed(1)}m. The wildcard is the best squad for the whole period; a free hit is the best squad for one week only, then your team returns.${st.busy?` Working: ${st.done} of ${2*H} done.`:''}</span></div>
     <div class="sqsum"><div><b>${f1(myTot)}</b><span>your team over ${horizonLabel(H)}</span></div><div><b>${f1(wcTot)}</b><span>wildcard squad, ${sg2(wcTot-myTot)}</span></div><div><b>${bestWK&&!st.busy?'GW '+d.horizon[bestWK.k]:'...'}</b><span>${bestWK&&!st.busy?'best week to play the wildcard, '+sg2(bestWK.cum)+' over the next '+H+' weeks from then':'working out'}</span></div><div><b>${bestFH&&!st.busy?'GW '+d.horizon[bestFH.g]:'...'}</b><span>${bestFH&&!st.busy?'best free hit week, '+sg2(bestFH.gain):'working out'}</span></div></div>
-    <table class="wt"><thead><tr><th>GW</th><th>Your XI</th><th>Wildcard now</th><th>Free hit</th><th>Wildcard from here<small>next ${H} weeks</small></th></tr></thead><tbody>${rows}</tbody></table>
+    <table class="wt"><thead><tr><th>GW</th><th>Your XI</th><th>Free hit</th><th>Wildcard from here<small>next ${H} weeks</small></th></tr></thead><tbody>${rows}</tbody></table>
     ${wcPanel(c, st, fh)}
-    <p class="sqnote">Each figure is the best XI that week with the captain doubled. The 'Wildcard now' column uses one squad for every week; the free hit column rebuilds the whole squad for that week alone, so it is always at least as high. The wildcard brings in ${out.length} new players and removes ${gone.length}. 'Wildcard from here' is the total gain over the next ${H} gameweeks from playing the wildcard in that week, with your current team until then (the figure underneath is per week); it ignores any transfers you would make in the meantime. No transfer hits are involved.</p>
+    <p class="sqnote">Each figure is the best XI that week with the captain doubled. The free hit column rebuilds the whole squad for that week alone, so it is always at least as high. The wildcard brings in ${out.length} new players and removes ${gone.length}. 'Wildcard from here' is the total gain over the next ${H} gameweeks from playing the wildcard in that week, with your current team until then (the figure underneath is per week); it ignores any transfers you would make in the meantime. No transfer hits are involved.</p>
     <details><summary>Wildcard squad</summary>${L.html}</details>
     <button type="button" class="do" id="wc-run">Run again</button></div>`;
 }
