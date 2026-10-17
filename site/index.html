@@ -480,7 +480,19 @@ const out = p => p.status==='i' || p.status==='s' || p.status==='u' || p.status=
 const sum = (a,n) => a.slice(0,n).reduce((x,y)=>x+y,0);
 const f1 = x => x.toFixed(1);
 
+/* Once a gameweek's deadline has passed nothing can change for it, so drop it and plan from the next one (the data is rebuilt at the next run). */
+const GWKEYS = ['ep','p_play','p60','pa','pc','pr','pst','psub','ms','mb','mins','fx'];
+function advanceExpired(d){
+  const now = Date.now(); let skipped = [];
+  while(d.horizon.length>8 && d.deadlines && d.deadlines[d.horizon[0]] && now >= Date.parse(d.deadlines[d.horizon[0]])){
+    skipped.push(d.horizon[0]); d.horizon.shift();
+    d.players.forEach(p => { GWKEYS.forEach(k => { if(Array.isArray(p[k])) p[k] = p[k].slice(1); }); p.total = p.ep.reduce((a,b)=>a+b,0); });
+    (d.teams||[]).forEach(t => { if(t.ft_next!=null){ t.ft = t.ft_next; } t.pending = 0; });
+  }
+  if(skipped.length){ d.notes = (d.notes||[]).concat([`Gameweek ${skipped.join(', ')} deadline${skipped.length>1?'s have':' has'} passed, so everything here starts from gameweek ${d.horizon[0]}. Transfers you make now count for gameweek ${d.horizon[0]}.`]); }
+}
 function start(d){
+  advanceExpired(d);
   DEF_HZ = Math.min(8, d.horizon.length); d.hall = d.horizon.slice(); d.horizon = d.hall.slice(0, DEF_HZ);   // the data runs 16 weeks so the wildcard solver sees far enough; only the first 8 are shown
   state.data = d; state.hz = DEF_HZ; loadLimits(); loadBank(); moInit(d); moBar();
   const pr = d.players.map(p => p.price).filter(x => x != null);

@@ -42,6 +42,15 @@ def live_bootstrap() -> dict | None:
         return None
 
 
+def load_deadlines(src) -> dict:
+    """gameweek -> deadline (UTC) from the data repo's gameweek summaries."""
+    try:
+        f = pd.read_csv(Path(src) / "data" / CURRENT_SEASON / "gameweek_summaries.csv", usecols=["id", "deadline_time"])
+        return {int(r.id): pd.Timestamp(r.deadline_time).tz_convert("UTC") for r in f.itertuples() if pd.notna(r.deadline_time)}
+    except Exception:  # noqa: BLE001
+        return {}
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("src")
@@ -55,6 +64,12 @@ def main() -> None:
     gw0 = current_gw(s.matches)
     if gw0 is None:
         raise SystemExit("no unplayed gameweek found - season over?")
+    # once a gameweek's deadline has passed nothing can change for it: plan for the next one
+    deadlines = load_deadlines(a.src)
+    now_utc = pd.Timestamp(datetime.now(timezone.utc))
+    while gw0 < 38 and gw0 in deadlines and now_utc >= deadlines[gw0]:
+        notes.append(f"Gameweek {gw0} deadline has passed, so projections start from gameweek {gw0 + 1}.")
+        gw0 += 1
     gws = [g for g in range(gw0, gw0 + HORIZON_GWS) if g <= 38]
     first_ko = s.matches.loc[s.matches["gameweek"] == gw0, "kickoff_time"].min()
     # use the moment of the run (or the GW start, if it already began) as the information cutoff
@@ -64,7 +79,8 @@ def main() -> None:
     # roster, status and news: live API if reachable, otherwise last data snapshot (post-GW row gw0-1)
     players = s.players.set_index("player_code")
     team_now = players["team_code"].astype(int)
-    st = ctx.status[(ctx.status["season"] == CURRENT_SEASON) & (ctx.status["gw"] == gw0 - 1)][["player_code", "status", "chance", "news", "penalties_order"]]
+    st_all = ctx.status[(ctx.status["season"] == CURRENT_SEASON) & (ctx.status["gw"] <= gw0 - 1)]
+    st = st_all[st_all["gw"] == st_all["gw"].max()][["player_code", "status", "chance", "news", "penalties_order"]]   # latest row available
     # price (GBP m) and ownership (%): latest snapshot row per player in the data repo (keyed id -> player_code)
     price, own = pd.Series(dtype=float), pd.Series(dtype=float)
     try:
@@ -182,7 +198,7 @@ def main() -> None:
     payload = {
         "floor": floor, "squad": SQUAD, "budget": BUDGET, "teams": teams_out,
         "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-        "season": CURRENT_SEASON, "current_gw": int(gw0), "horizon": gws, "model_version": params.version,
+        "season": CURRENT_SEASON, "current_gw": int(gw0), "horizon": gws, "deadlines": {int(g): deadlines[g].isoformat() for g in gws if g in deadlines}, "model_version": params.version,
         "gw_dates": {int(gw): str(s.matches.loc[s.matches["gameweek"] == gw, "kickoff_time"].min()) for gw in gws},
         "notes": notes, "penalties": pens, "players": out_players,
     }
