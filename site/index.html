@@ -1075,9 +1075,17 @@ function comboSearch(data, hz, T, sq, n, ban, nStarts){
   };
   // starting points: greedy builds that begin from each of the best few single moves
   const first = [];
-  for(const a of free) for(const c of cands[sq[a].pos]){ const r = evs([{a,c}]); if(r) first.push({sl:[{a,c}], v:r.val}); }
+  for(const a of free) for(const c of cands[sq[a].pos]){ const r = evs([{a,c}]); if(r) first.push({sl:[{a,c}], v:r.val, g:r.gain}); }
   first.sort((x,y)=>y.v-x.v);
   const starts = first.slice(0, nStarts);
+  // Also start from the biggest upgrades even when they cannot be afforded yet: the search then sells down elsewhere (a cheaper, weaker player)
+  // to pay for them, which the affordability penalty would otherwise rank too low to try.
+  const have = new Set(starts.map(x=>x.sl[0].a+'|'+x.sl[0].c.p.code)), usedIn = new Set(), usedOut = new Map();
+  for(const f of first.slice().sort((x,y)=>y.g-x.g)){
+    const k = f.sl[0].a+'|'+f.sl[0].c.p.code; if(have.has(k) || usedIn.has(f.sl[0].c.p.code) || (usedOut.get(f.sl[0].a)||0)>=2) continue;
+    usedIn.add(f.sl[0].c.p.code); usedOut.set(f.sl[0].a, (usedOut.get(f.sl[0].a)||0)+1); starts.push(f); have.add(k);
+    if(starts.length >= nStarts + (n>=4 ? 4 : 6)) break;
+  }
   for(const st of starts){
     let sl = st.sl;
     while(sl.length<n){ const m = bestMove(sl, n); if(!m.best) break; sl = m.best; }
