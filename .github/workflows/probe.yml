@@ -1,0 +1,42 @@
+name: probe-fpl-api
+# Temporary: lists which fields the official FPL API exposes (for the price-change predictor). Delete once used.
+on:
+  workflow_dispatch:
+  push:
+    paths: [".github/workflows/probe.yml"]
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Look at the API
+        run: |
+          python3 - <<'PY'
+          import json, urllib.request
+          H = {"User-Agent": "Mozilla/5.0"}
+          def get(u):
+              try:
+                  with urllib.request.urlopen(urllib.request.Request(u, headers=H), timeout=30) as r:
+                      return r.status, r.read()
+              except Exception as e:
+                  return str(e), b""
+          def note(s): print("::notice::" + s.replace("\n", " ")[:3500])
+          st, b = get("https://fantasy.premierleague.com/api/bootstrap-static/")
+          note(f"bootstrap status {st} bytes {len(b)}")
+          d = json.loads(b) if b else {}
+          note("top keys: " + ",".join(d.keys()))
+          els = d.get("elements", [])
+          if els:
+              note("element keys: " + ",".join(els[0].keys()))
+              top = sorted(els, key=lambda e: -abs(e.get("transfers_in_event", 0) - e.get("transfers_out_event", 0)))[:3]
+              for e in top:
+                  note("sample " + json.dumps({k: v for k, v in e.items() if any(w in k for w in ("cost", "price", "transfers", "selected", "progress", "predict", "change", "web_name"))}))
+          for k in ("events", "game_settings", "element_types"):
+              v = d.get(k)
+              if isinstance(v, list) and v: note(f"{k} keys: " + ",".join(v[0].keys()))
+              elif isinstance(v, dict): note(f"{k}: " + json.dumps(v)[:800])
+          for u in ("price-changes", "price-change-predictor", "price-predictor", "elements/price-changes", "price-changes/", "predicted-price-changes", "element-price-changes"):
+              st, b = get("https://fantasy.premierleague.com/api/" + u)
+              note(f"{u}: {st} {b[:300]!r}")
+          PY
