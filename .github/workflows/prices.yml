@@ -1,0 +1,39 @@
+name: Refresh prices
+
+# Publishes the official price-change predictor figures to the orphan branch "prices" (prices.json) so the site can read them
+# without a redeploy. Only that one file is ever on the branch, and it is overwritten each time, so there is no history to grow.
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: prices
+  cancel-in-progress: true
+
+jobs:
+  prices:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Fetch prices
+        run: python scripts/fetch_prices.py "$RUNNER_TEMP/prices.json"
+      - name: Publish to the prices branch
+        run: |
+          set -e
+          d=$(mktemp -d)
+          cp "$RUNNER_TEMP/prices.json" "$d/prices.json"
+          cd "$d"
+          git init -q -b prices
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add prices.json
+          git commit -qm "Prices $(date -u +%FT%TZ)"
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" prices

@@ -43,3 +43,10 @@ and **return from absence** (share of recent matches unavailable, days since he 
 computed for each player in each target fixture (`Context._minutes_fx`). Backtest (15 gameweeks, 12.5k player-weeks):
 minutes MAE 12.5 → 11.4, RMSE 20.9 → 20.3, bias about 0, points MAE 0.989 → 0.969. Most of the gain comes from the
 return-from-absence features, then competition for places and rest. A rating-gap (Elo) feature added nothing.
+
+## Price alerts
+
+`.github/workflows/prices.yml` runs every 30 minutes, reads the official FPL price-change predictor figures from the public bootstrap-static feed
+(`scripts/fetch_prices.py`) and force-pushes one file, `prices.json`, to the orphan branch `prices`. The site fetches it from
+raw.githubusercontent.com on load, so prices stay fresh without a redeploy. It flags suggested signings about to rise, players you would sell
+(or own) about to fall, and players whose price has already moved since the last full update.

@@ -166,6 +166,8 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
 .to .fx{background:var(--warn);color:#000;border-radius:3px;padding:0 4px;margin-right:4px;font:700 .55rem var(--num);text-transform:uppercase;font-style:normal}
 .lim .kg{display:flex;align-items:center;gap:6px}
 .limw{margin:8px 0;font-size:.8rem}
+.px{font:600 .62rem var(--num);font-style:normal;border-radius:5px;padding:1px 5px;margin-left:5px;white-space:nowrap;display:inline-block}.px.act{background:var(--warn);color:#000}.px.soft{background:var(--card2);color:var(--ink2)}
+.pxw p{margin:0;font-size:.82rem}.pxw p b{font-weight:700}.pxw .pxf{font-size:.7rem;color:var(--ink2)}
 .nts{display:flex;align-items:center;gap:6px;font:600 .72rem var(--body);color:var(--ink2)}.nts select{font:inherit;padding:3px 6px}
 .to.co .tl{display:flex;flex-direction:column;gap:6px}.to.co .cl{display:flex;flex-direction:column;gap:1px}
 .sqctl{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;margin:4px 0 10px}
@@ -510,7 +512,7 @@ function start(d){
   $('#sq-team').value=String(state.mine);
   for(const id of ['#pmin','#pmax']){ const e=$(id); e.min=state.lo; e.max=state.hi; }
   $('#pmin').value = state.pmin; $('#pmax').value = state.pmax; syncPrice();
-  $('#s-next').textContent = 'GW ' + g0;
+  $('#s-next').textContent = 'GW ' + g0; loadPrices();
   const nn = d.notes.filter(x=>!x.startsWith('Penalty watch')); const n = nn.length ? nn.map(x=>`<p>${esc(x)}</p>`).join('') : '';
   $('#foot').innerHTML = n + `<p>Expected points under the official FPL scoring, from a team model plus a per-player model. Players with fewer than five league appearances are marked new: treat their numbers as rough. Model ${esc(d.model_version)}.</p>`;
   render();
@@ -1109,6 +1111,61 @@ function workTeam(T){
   return {squad:[...m].map(([code,sell])=>({code,sell})), bank};
 }
 function weekly(sq, hz){ const r=[]; for(let g=0; g<hz; g++) r.push(pickGW(sq,g).pts); return r; }
+/* ---------- price changes: the official predictor, refreshed on its own every 30 minutes (prices branch), no redeploy needed ---------- */
+const PX_URL = 'https://raw.githubusercontent.com/campbelltom/fpl-projections/prices/prices.json';
+function loadPrices(){
+  if(state.pxAt && Date.now()-state.pxAt < 5*60e3) return;
+  state.pxAt = Date.now();
+  fetch(PX_URL, {cache:'no-store'}).then(r => r.ok ? r.json() : null).then(j => {
+    if(!j || !j.p) return; state.px = j; if(view_is_squad()) renderSquad();
+  }).catch(() => {});
+}
+document.addEventListener('visibilitychange', () => { if(!document.hidden && state.data) loadPrices(); });
+/* row = [now_cost, progress, projected tonight, likelihood, projected tomorrow, likelihood, projected the day after, likelihood, (1 = not reliable yet)].
+   Progress runs to +100 for a rise and -100 for a fall; the projection says where it will be at the next 00:00 UK change. */
+function pxInfo(p){
+  const r = state.px && state.px.p[p.code]; if(!r) return null;
+  const moved = r[0] - Math.round(p.price*10), ok = r.length < 9;
+  const lvl = v => v>=100 ? 2 : v<=-100 ? -2 : v>=85 ? 1 : v<=-85 ? -1 : 0;     // 2 / -2 change expected, 1 / -1 close to one
+  const night = ok ? lvl(r[2]) : 0, next = ok && !night && Math.abs(lvl(r[4]))===2 ? lvl(r[4])/2 : 0;
+  return {moved, night, next, now:r[0]/10, was:Math.round(p.price*10)/10};
+}
+function pxBadge(p, role){          // role: 'in' = being bought, 'out' = being sold or already owned
+  const i = pxInfo(p); if(!i) return '';
+  const b = (c,t) => `<em class="px ${c}">${t}</em>`;
+  if(i.moved) return b('act', `price now £${i.now.toFixed(1)}m`);
+  if(role==='in'){
+    if(i.night===2) return b('act', 'rises tonight: buy before midnight');
+    if(i.night===-2) return b('soft', 'falls tonight: waiting saves £0.1m');
+    if(i.night===1) return b('soft', 'close to rising');
+    if(i.night===-1) return b('soft', 'close to falling');
+    if(i.next===1) return b('soft', 'rises tomorrow');
+    if(i.next===-1) return b('soft', 'falls tomorrow');
+  } else {
+    if(i.night===-2) return b('act', 'falls tonight: sell before midnight');
+    if(i.night===-1) return b('soft', 'close to falling');
+    if(i.next===-1) return b('soft', 'falls tomorrow');
+  }
+  return '';
+}
+function pxBox(sq, ins, outs){
+  if(!state.px) return '';
+  const at = new Date(state.px.at), age = (Date.now()-at)/36e5, tm = at.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
+  const uniq = a => { const m = new Map(); a.forEach(p => m.set(p.code, p)); return [...m.values()]; };
+  const buy = uniq(ins), mine = uniq(sq.concat(outs)), all = uniq(buy.concat(mine));
+  const names = a => a.map(p => esc(p.name)).join(', ');
+  const lines = [];
+  const rise = buy.filter(p => (pxInfo(p)||{}).night===2 && !pxInfo(p).moved), wait = buy.filter(p => (pxInfo(p)||{}).night===-2 && !pxInfo(p).moved);
+  const fall = mine.filter(p => (pxInfo(p)||{}).night===-2 && !pxInfo(p).moved), tmrw = uniq(buy.concat(mine)).filter(p => { const i = pxInfo(p); return i && !i.moved && i.night!==2 && i.night!==-2 && (i.next || i.night); });
+  const moved = all.filter(p => (pxInfo(p)||{}).moved);
+  if(rise.length) lines.push(`<p><b>Act today:</b> ${names(rise)} ${rise.length>1?'are':'is'} expected to rise tonight, so a suggested signing costs £0.1m more tomorrow.</p>`);
+  if(fall.length) lines.push(`<p><b>Act today:</b> ${names(fall)} ${fall.length>1?'are':'is'} expected to fall tonight. If you are selling ${fall.length>1?'them':'him'}, do it before midnight to keep the higher sell price.</p>`);
+  if(wait.length) lines.push(`<p>${names(wait)} ${wait.length>1?'are':'is'} expected to fall tonight, so waiting would save £0.1m.</p>`);
+  if(moved.length) lines.push(`<p><b>Price already changed since the last update:</b> ${moved.map(p => `${esc(p.name)} £${pxInfo(p).was.toFixed(1)}m to £${pxInfo(p).now.toFixed(1)}m`).join(', ')}. Budgets below were worked out at the old price.</p>`);
+  if(tmrw.length) lines.push(`<p class="pxf">Watching: ${tmrw.map(p => { const i = pxInfo(p), d = i.night ? i.night : i.next*2; return `${esc(p.name)} (${d>0?'rise':'fall'} ${i.night? 'close' : 'tomorrow'})`; }).join(', ')}.</p>`);
+  const foot = `<p class="pxf">Price changes, official predictor, checked ${tm}${age>3?' (over three hours old, so treat it with care)':''}. It is a forecast: late transfers can change it before midnight.</p>`;
+  return lines.length ? `<div class="wi pxw">${lines.join('')}${foot}</div>` : `<p class="sqnote">No price changes are expected tonight for your squad or these suggestions. Predictor checked ${tm}.</p>`;
+}
 function renderTeam(hz, T){
   const d = state.data, out = $('#sqout');
   if(T.error){ out.innerHTML = `<div class="empty">Team ${esc(T.label)} could not be loaded on the last update (${esc(T.error)}). It will be tried again on the next run.</div>`; return; }
@@ -1136,8 +1193,8 @@ function renderTeam(hz, T){
         <button type="button" class="do" data-do="${i}">Make this transfer</button></div>`;
     }
     return `<div class="to pos-${o.inn.pos}${open?' open':''}"><button type="button" class="tr" data-opt="${i}" aria-expanded="${open}">
-      <span class="tl"><span class="in"><em>IN</em>${o.fix?'<em class="fx">fixes limit</em>':''}${medical(o.inn)}<b>${esc(o.inn.name)}</b> <small>${o.inn.team} ${o.inn.pos} £${o.inn.price.toFixed(1)}m${o.inn.own!=null?' · '+o.inn.own.toFixed(1)+'%':''}</small></span>
-      <span class="ot"><em>OUT</em><b>${esc(o.out.name)}</b> <small>${o.out.team} £${o.sell.toFixed(1)}m</small></span></span>
+      <span class="tl"><span class="in"><em>IN</em>${o.fix?'<em class="fx">fixes limit</em>':''}${medical(o.inn)}<b>${esc(o.inn.name)}</b> <small>${o.inn.team} ${o.inn.pos} £${o.inn.price.toFixed(1)}m${o.inn.own!=null?' · '+o.inn.own.toFixed(1)+'%':''}</small>${pxBadge(o.inn,'in')}</span>
+      <span class="ot"><em>OUT</em><b>${esc(o.out.name)}</b> <small>${o.out.team} £${o.sell.toFixed(1)}m</small>${pxBadge(o.out,'out')}</span></span>
       <span class="tg"><b>${sg2(o.gain)}</b>${hit?`<small>${sg2(o.gain-hit)} after hit</small>`:`<small>${sg2(o.gain1)} in GW ${d.horizon[0]}</small>`}</span></button>${det}</div>`;
   }).join('');
   const ntSel = `<label class="nts">Transfers together<select id="nt" aria-label="How many transfers to combine">${[1,2,3,4,5].map(k=>`<option value="${k}"${k===nt?' selected':''}>${k===1?'1 (single moves)':k+' at once'}</option>`).join('')}</select></label>`;
@@ -1155,7 +1212,7 @@ function renderTeam(hz, T){
     else if(!cb.res.length) body = `<div class="empty">No set of ${nt} transfers beats your team by enough in the coming gameweek and over ${horizonLabel(hz)}, with every transfer pulling its weight. Try fewer.</div>`;
     else body = cb.res.map((r,i) => {
       const open = state.copen===i, net = r.gain - hn;
-      const lines = r.moves.map(m => `<span class="cl pos-${m.inn.pos}"><span class="in"><em>IN</em>${medical(m.inn)}<b>${esc(m.inn.name)}</b> <small>${m.inn.team} £${m.inn.price.toFixed(1)}m</small></span><span class="ot"><em>OUT</em><b>${esc(m.out.name)}</b> <small>${m.out.team} £${m.sell.toFixed(1)}m</small></span></span>`).join('');
+      const lines = r.moves.map(m => `<span class="cl pos-${m.inn.pos}"><span class="in"><em>IN</em>${medical(m.inn)}<b>${esc(m.inn.name)}</b> <small>${m.inn.team} £${m.inn.price.toFixed(1)}m</small>${pxBadge(m.inn,'in')}</span><span class="ot"><em>OUT</em><b>${esc(m.out.name)}</b> <small>${m.out.team} £${m.sell.toFixed(1)}m</small>${pxBadge(m.out,'out')}</span></span>`).join('');
       let det = '';
       if(open){
         const nsq = sq.map(p => { const m = r.moves.find(x=>x.out.code===p.code); return m ? m.inn : p; }), after = weekly(nsq, hz);
@@ -1170,7 +1227,9 @@ function renderTeam(hz, T){
   const wi = nm ? `<div class="wi"><div><b>${nm} transfer${nm>1?'s':''} made</b> <span>${state.moves.map(m=>`${esc(by.get(m.o).name)} to ${esc(by.get(m.i).name)}`).join(', ')}</span></div>
     <div class="wn"><span><b>${sg2(L.xiPts-base0)}</b> points</span><span><b>${hitSoFar?'\u2212'+hitSoFar:'0'}</b> hit</span><span><b>${sg2(L.xiPts-base0-hitSoFar)}</b> net</span></div>
     <button type="button" id="wi-reset">Back to my team</button></div>` : '';
-  out.innerHTML = head + wi + `<div class="sqsum"><div><b>${f1(L.xiPts)}</b><span>XI points with the captain doubled</span></div><div><b>${esc(short(L.cap.name))}</b><span>captain in ${L.capN} of ${hz} weeks</span></div><div><b>£${W.bank.toFixed(1)}m</b><span>in the bank</span></div></div>
+  const shown = nt===1 ? R.opts : (state.combo && !state.combo.busy && state.combo.res ? state.combo.res.flatMap(r => r.moves) : []);
+  const pxb = pxBox(sq, shown.map(o => o.inn), shown.map(o => o.out));
+  out.innerHTML = head + wi + pxb + `<div class="sqsum"><div><b>${f1(L.xiPts)}</b><span>XI points with the captain doubled</span></div><div><b>${esc(short(L.cap.name))}</b><span>captain in ${L.capN} of ${hz} weeks</span></div><div><b>£${W.bank.toFixed(1)}m</b><span>in the bank</span></div></div>
     <p class="sqnote">${MEDNOTE}</p>${L.html}<div id="wcbox">${wcHTML()}</div>${lst}`;
 }
 /* ---------- wildcard and free hit simulation ---------- */
