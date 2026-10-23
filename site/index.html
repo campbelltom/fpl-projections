@@ -167,6 +167,7 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
 .lim .kg{display:flex;align-items:center;gap:6px}
 .limw{margin:8px 0;font-size:.8rem}
 .px{font:600 .62rem var(--num);font-style:normal;border-radius:5px;padding:1px 5px;margin-left:5px;white-space:nowrap;display:inline-block}.px.act{background:var(--warn);color:#000}.px.soft{background:var(--card2);color:var(--ink2)}
+button.fhb{font:600 .72rem var(--num);padding:5px 9px;border-radius:8px;border:0;background:var(--ink);color:var(--bg);margin-left:6px;cursor:pointer}
 .pxw p{margin:0;font-size:.82rem}.pxw p b{font-weight:700}.pxw .pxf{font-size:.7rem;color:var(--ink2)}
 .nts{display:flex;align-items:center;gap:6px;font:600 .72rem var(--body);color:var(--ink2)}.nts select{font:inherit;padding:3px 6px}
 .to.co .tl{display:flex;flex-direction:column;gap:6px}.to.co .cl{display:flex;flex-direction:column;gap:1px}
@@ -426,7 +427,7 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
 const $ = s => document.querySelector(s);
 const POS = ['All','GKP','DEF','MID','FWD'];
 let DEF_HZ = 8;
-const state = {pos:'All', team:'', q:'', hz:8, avail:false, sort:'total', open:null, pmin:0, pmax:99, lo:0, hi:99, data:null, intro:true, vbase:'starter', view:'players', mine:-1, ft:1, plan:null, sel:null, budget:100, locked:new Set(), banned:new Set(), squad:null, srow:null, opt:null, wc:null, wcg:null, wcv:'fh', lug:0, luo:new Set(), rpl:null, repq:'', mo:{}, mp:null, mw:null, moves:[], optList:[], dall:3, dcap:{}, keepGk:true, nt:1, combo:null, copen:null, bkadj:{}};
+const state = {pos:'All', team:'', q:'', hz:8, avail:false, sort:'total', open:null, pmin:0, pmax:99, lo:0, hi:99, data:null, intro:true, vbase:'starter', view:'players', mine:-1, ft:1, plan:null, sel:null, budget:100, locked:new Set(), banned:new Set(), squad:null, srow:null, opt:null, wc:null, wcg:null, wcv:'fh', lug:0, luo:new Set(), rpl:null, repq:'', mo:{}, mp:null, mw:null, moves:[], optList:[], dall:3, dcap:{}, keepGk:true, nt:1, combo:null, copen:null, bkadj:{}, fhgw:null};
 const store = {
   get(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } },
   set(k,v){ try{ localStorage.setItem(k,v); }catch(e){} },
@@ -495,7 +496,7 @@ function advanceExpired(d){
 function start(d){
   advanceExpired(d);
   DEF_HZ = Math.min(8, d.horizon.length); d.hall = d.horizon.slice(); d.horizon = d.hall.slice(0, DEF_HZ);   // the data runs 16 weeks so the wildcard solver sees far enough; only the first 8 are shown
-  state.data = d; state.hz = DEF_HZ; loadLimits(); loadBank(); moInit(d); moBar();
+  state.data = d; state.hz = DEF_HZ; loadLimits(); loadBank(); loadFh(); moInit(d); moBar();
   const pr = d.players.map(p => p.price).filter(x => x != null);
   state.lo = state.pmin = Math.floor(Math.min(...pr)*10)/10; state.hi = state.pmax = Math.ceil(Math.max(...pr)*10)/10;
   $('#lock').hidden = true; $('#app').hidden = false;
@@ -944,20 +945,35 @@ function loadBank(){ try{ state.bkadj = JSON.parse(store.get('fpl-bkadj')||'{}')
 const adjBank = T => Math.round((T.bank + (state.bkadj[T.id]||0))*10)/10;
 function loadLimits(){ try{ const v = JSON.parse(store.get('fpl-dlim')||'null'); if(v){ state.dall = [1,2,3].includes(v.all)?v.all:3; state.dcap = v.cap||{}; state.keepGk = v.kgk!==false; } }catch(e){} }
 function saveLimits(){ store.set('fpl-dlim', JSON.stringify({all:state.dall, cap:state.dcap, kgk:state.keepGk})); }
+/* A planned free hit: that week's points do not matter for long-term decisions (the squad is replaced for that week and then returns),
+   so transfers, the wildcard and the squad builder all work on the same data with that week taken out. */
+function loadFh(){ try{ const v = JSON.parse(store.get('fpl-fhplan')||'null'); state.fhgw = v && Number.isInteger(v.gw) ? v.gw : null; }catch(e){ state.fhgw = null; } if(state.fhgw!=null && !state.data.hall.includes(state.fhgw)) state.fhgw = null; }
+function fhIdx(){ return state.fhgw==null ? -1 : state.data.hall.indexOf(state.fhgw); }
+function fhData(d, f){ return {squad:d.squad, players:d.players.map(p => Object.assign({}, p, {ep:p.ep.filter((_,i)=>i!==f)}))}; }
+function fhEff(d, hz){ const f = fhIdx(); if(f<0 || f>=hz || hz<2) return {d, hz, f:-1}; return {d:fhData(d,f), hz:hz-1, f}; }
+function setFh(gw){
+  state.fhgw = gw; store.set('fpl-fhplan', JSON.stringify({gw}));
+  state.combo = null; state.opt = null; state.copen = null; state.squad = null;
+  const old = state.wc; state.wc = null; if(old && !old.busy && old.wild) runWild(old.fh);       // the free hit column does not depend on the plan, so it is reused
+  renderSquad();
+}
 function renderLimits(){
   const teams = [...new Set(state.data.players.map(p=>p.team))].sort(), n = Object.keys(state.dcap).length;
   const opt = (v,cur) => [1,2,3].map(k=>`<option value="${k}"${k===cur?' selected':''}>${k}</option>`).join('');
-  $('#lim').querySelector('summary').textContent = 'Limits and preferences' + (state.dall<3||n||!state.keepGk ? ' (changed)' : '');
+  $('#lim').querySelector('summary').textContent = 'Limits and preferences' + (state.dall<3||n||!state.keepGk||state.fhgw!=null ? ' (changed)' : '');
   $('#limbody').innerHTML = `<div class="lr"><span>Most goalkeepers and defenders from one club:</span><select id="lim-all" aria-label="Most goalkeepers and defenders from any club">${opt(0,state.dall)}</select><span>(3 is the game's own limit)</span></div>
     <div class="lr"><span>Club by club:</span><select id="lim-club" aria-label="Club">${teams.map(t=>`<option>${t}</option>`).join('')}</select><select id="lim-n" aria-label="Most goalkeepers and defenders">${opt(0,2)}</select><button type="button" class="chip" id="lim-set">Set</button>${Object.keys(state.dcap).sort().map(t=>`<button type="button" class="chip" data-limx="${t}" title="Remove">${t} max ${state.dcap[t]} \u00d7</button>`).join('')}</div>
+    <div class="lr"><span>Free hit planned in:</span><select id="lim-fh" aria-label="Gameweek of your planned free hit"><option value="">not planned</option>${state.data.horizon.map(g=>`<option value="${g}"${g===state.fhgw?' selected':''}>GW ${g}</option>`).join('')}</select><span>(that week is left out of suggested transfers, the wildcard and the squad builder)</span></div>
     <label class="lr kg"><input type="checkbox" id="lim-gk"${state.keepGk?' checked':''}> Leave my spare goalkeeper alone (never suggest selling him)</label>
     <div class="sqnote">Applies to the squad builder, wildcard, free hit, replacements and suggested transfers. Goalkeepers count with defenders; midfielders and forwards are not capped beyond the game's three-per-club rule.</div>`;
 }
 function limChanged(){ saveLimits(); state.wc = null; renderSquad(); }
-document.addEventListener('change', ev => { if(ev.target.id==='lim-gk'){ state.keepGk = ev.target.checked; limChanged(); return; } if(ev.target.id==='nt'){ state.nt = +ev.target.value; state.copen = null; state.opt = null; renderSquad(); return; } if(ev.target.id==='lim-all'){ state.dall = +ev.target.value; limChanged(); } });
+document.addEventListener('change', ev => { if(ev.target.id==='lim-gk'){ state.keepGk = ev.target.checked; limChanged(); return; } if(ev.target.id==='nt'){ state.nt = +ev.target.value; state.copen = null; state.opt = null; renderSquad(); return; } if(ev.target.id==='lim-all'){ state.dall = +ev.target.value; limChanged(); return; } if(ev.target.id==='lim-fh'){ setFh(ev.target.value==='' ? null : +ev.target.value); } });
 document.addEventListener('click', ev => {
   if(ev.target.id==='lim-set'){ state.dcap[$('#lim-club').value] = +$('#lim-n').value; limChanged(); }
   const x = ev.target.closest('button[data-limx]'); if(x){ delete state.dcap[x.dataset.limx]; limChanged(); }
+  const fs = ev.target.closest('button[data-fhset]'); if(fs){ setFh(+fs.dataset.fhset); return; }
+  if(ev.target.closest('button[data-fhclr]')){ setFh(null); return; }
 });
 function renderSquad(){
   renderLimits();
@@ -1175,11 +1191,12 @@ function renderTeam(hz, T){
   const owned = new Set(T.squad.map(x=>x.code)), L = lineupHTML(sq, hz, owned);
   const base0 = weekly(sq0, hz).reduce((a,b)=>a+b,0), ftLeft = Math.max(0, state.ft-nm), hitSoFar = HIT*Math.max(0, nm-state.ft);
   const head = `<p class="sqnote"><b>${esc(T.name||T.label)}</b>${T.manager?`, ${esc(T.manager)}`:''}. Bank £${adjBank(T).toFixed(1)}m${state.bkadj[T.id]?` (adjusted by ${state.bkadj[T.id]>0?'+':'\u2212'}£${Math.abs(state.bkadj[T.id]).toFixed(1)}m)`:''}. Squad as of gameweek ${T.gw}${T.pending?`, with ${T.pending} transfer${T.pending>1?'s':''} already made for gameweek ${d.horizon[0]}`:''}. Free transfers are an estimate, so check the number above.</p>`;
-  const R = transferOptions(d, hz, W, sq), hit = ftLeft>0 ? 0 : HIT; state.optList = R.opts;
-  const nt = state.nt, cKey = [nm, hz, nt, state.ft, [...state.banned].join(), [...state.locked].join(), state.dall, JSON.stringify(state.dcap), state.keepGk, JSON.stringify(state.mo).length, d.generated_at, W.bank].join('|');
+  const X = fhEff(d, hz), R = transferOptions(X.d, X.hz, W, sq), hit = ftLeft>0 ? 0 : HIT; R.opts.forEach(o => { o.inn = by.get(o.inn.code); }); state.optList = R.opts;
+  const sumX = (ep, n) => ep.slice(0,n).reduce((t,v,i) => t + (i===X.f ? 0 : v), 0);
+  const nt = state.nt, cKey = [nm, hz, nt, state.ft, [...state.banned].join(), [...state.locked].join(), state.dall, JSON.stringify(state.dcap), state.keepGk, JSON.stringify(state.mo).length, d.generated_at, W.bank, state.fhgw].join('|');
   if(nt>1 && (!state.combo || state.combo.key!==cKey)){
     const cb = state.combo = {key:cKey, busy:true, res:null};
-    setTimeout(() => { try{ cb.res = comboTop(d, hz, W, sq, nt); }catch(e){ cb.res = []; } cb.busy = false; if(state.combo===cb && view_is_squad()) renderSquad(); }, 30);
+    setTimeout(() => { try{ cb.res = comboTop(X.d, X.hz, W, sq, nt).map(r => Object.assign({}, r, {moves:r.moves.map(m => Object.assign({}, m, {inn:by.get(m.inn.code)}))})); }catch(e){ cb.res = []; } cb.busy = false; if(state.combo===cb && view_is_squad()) renderSquad(); }, 30);
   }
   const sg2 = x => (x>=0?'+':'\u2212')+Math.abs(x).toFixed(1);
   const before = weekly(sq, hz);
@@ -1188,8 +1205,8 @@ function renderTeam(hz, T){
     let det = '';
     if(open){
       const after = weekly(sq.map(p=>p.code===o.out.code?o.inn:p), hz);
-      det = `<div class="od"><div class="ow">${after.map((v,g)=>`<span><small>GW ${d.horizon[g]}</small><b class="${v-before[g]>0.005?'up':''}">${sg2(v-before[g])}</b></span>`).join('')}</div>
-        <p>${esc(o.inn.name)} projects ${f1(sum(o.inn.ep,hz))} points over ${horizonLabel(hz)} against ${f1(sum(o.out.ep,hz))} for ${esc(o.out.name)}. The gain counts only what changes in your best XI each week (captain doubled), so a player who would sit on the bench adds nothing. Sells for £${o.sell.toFixed(1)}m, leaving £${o.left.toFixed(1)}m in the bank.${o.inn.status!=='a'&&o.inn.status!=='n'?' He is flagged with injury news.':''}</p>
+      det = `<div class="od"><div class="ow">${after.map((v,g)=>`<span><small>GW ${d.horizon[g]}${g===X.f?' FH':''}</small><b class="${g!==X.f&&v-before[g]>0.005?'up':''}">${g===X.f?'-':sg2(v-before[g])}</b></span>`).join('')}</div>
+        <p>${esc(o.inn.name)} projects ${f1(sumX(o.inn.ep,hz))} points over ${horizonLabel(hz)}${X.f>=0?' (leaving out your free hit week)':''} against ${f1(sumX(o.out.ep,hz))} for ${esc(o.out.name)}. The gain counts only what changes in your best XI each week (captain doubled), so a player who would sit on the bench adds nothing. Sells for £${o.sell.toFixed(1)}m, leaving £${o.left.toFixed(1)}m in the bank.${o.inn.status!=='a'&&o.inn.status!=='n'?' He is flagged with injury news.':''}</p>
         <button type="button" class="do" data-do="${i}">Make this transfer</button></div>`;
     }
     return `<div class="to pos-${o.inn.pos}${open?' open':''}"><button type="button" class="tr" data-opt="${i}" aria-expanded="${open}">
@@ -1201,9 +1218,10 @@ function renderTeam(hz, T){
   const hitN = k => HIT*Math.max(0, k-ftLeft);
   const dcs = defCounts(sq), overs = Object.keys(dcs).filter(t => dcs[t] > capFor(t)).map(t => `${t} has ${dcs[t]} goalkeepers and defenders (limit ${capFor(t)})`);
   const limWarn = overs.length ? `<div class="wi limw"><b>Over your club limit:</b> ${overs.join('; ')}. Suggestions never add to this, and moves that bring it back inside the limit are listed first, marked "fixes limit", even if they gain little.</div>` : '';
+  const fhWarn = X.f>=0 ? `<div class="wi limw"><b>Free hit planned in GW ${state.fhgw}:</b> that week is left out, so these suggestions are judged on the other weeks only. <button type="button" class="fhb" data-fhclr="1">Clear</button></div>` : '';
   let lst;
   if(nt===1){
-    lst = limWarn + `<div class="tohd"><div class="tht"><b>${R.opts.length?`Best ${R.opts.length} single transfers`:'Single transfers'}</b>${ntSel}</div><span>Only moves that add points in the coming gameweek are listed; the rest can wait. ${ftLeft>0?`You have ${ftLeft} free transfer${ftLeft>1?'s':''}.`:`With no free transfer left, each costs ${HIT} points: the second figure is after that.`}</span></div>`
+    lst = limWarn + fhWarn + `<div class="tohd"><div class="tht"><b>${R.opts.length?`Best ${R.opts.length} single transfers`:'Single transfers'}</b>${ntSel}</div><span>Only moves that add points in the coming gameweek are listed; the rest can wait. ${ftLeft>0?`You have ${ftLeft} free transfer${ftLeft>1?'s':''}.`:`With no free transfer left, each costs ${HIT} points: the second figure is after that.`}</span></div>`
       + (R.opts.length ? rows : '<div class="empty">No single transfer improves this squad within your budget and the three-per-club rule.</div>');
   } else {
     const cb = state.combo, hn = hitN(nt);
@@ -1216,13 +1234,13 @@ function renderTeam(hz, T){
       let det = '';
       if(open){
         const nsq = sq.map(p => { const m = r.moves.find(x=>x.out.code===p.code); return m ? m.inn : p; }), after = weekly(nsq, hz);
-        det = `<div class="od"><div class="ow">${after.map((v,g)=>`<span><small>GW ${d.horizon[g]}</small><b class="${v-before[g]>0.005?'up':''}">${sg2(v-before[g])}</b></span>`).join('')}</div>
+        det = `<div class="od"><div class="ow">${after.map((v,g)=>`<span><small>GW ${d.horizon[g]}${g===X.f?' FH':''}</small><b class="${g!==X.f&&v-before[g]>0.005?'up':''}">${g===X.f?'-':sg2(v-before[g])}</b></span>`).join('')}</div>
           <p>Together these add ${f1(r.gain)} points over ${horizonLabel(hz)} (${sg2(r.gain1)} in GW ${d.horizon[0]}), counting only what changes in your best XI each week, captain doubled. ${hn?`${nt} transfers with ${ftLeft} free costs ${hn} points, leaving ${sg2(net)} net. `:`That is within your free transfers. `}£${r.left.toFixed(1)}m left in the bank.</p>
           <button type="button" class="do" data-doco="${i}">Make these ${nt} transfers</button></div>`;
       }
       return `<div class="to co${open?' open':''}"><button type="button" class="tr" data-co="${i}" aria-expanded="${open}"><span class="tl">${lines}</span><span class="tg"><b>${sg2(r.gain)}</b><small>${hn?sg2(net)+' after hits':sg2(r.gain1)+' in GW '+d.horizon[0]}</small></span></button>${det}</div>`;
     }).join('');
-    lst = limWarn + `<div class="tohd"><div class="tht"><b>Best ${nt} transfers together</b>${ntSel}</div><span>Sets of ${nt} moves chosen jointly, so one sale can fund another signing. Every transfer in a set has to add something; each set must also add points in the coming gameweek. ${ftLeft>0?`You have ${ftLeft} free transfer${ftLeft>1?'s':''}${nt>ftLeft?`, so ${nt-ftLeft} cost${nt-ftLeft>1?'':'s'} ${HIT} points each`:''}.`:`With no free transfer left, each costs ${HIT} points.`}</span></div>${body}`;
+    lst = limWarn + fhWarn + `<div class="tohd"><div class="tht"><b>Best ${nt} transfers together</b>${ntSel}</div><span>Sets of ${nt} moves chosen jointly, so one sale can fund another signing. Every transfer in a set has to add something; each set must also add points in the coming gameweek. ${ftLeft>0?`You have ${ftLeft} free transfer${ftLeft>1?'s':''}${nt>ftLeft?`, so ${nt-ftLeft} cost${nt-ftLeft>1?'':'s'} ${HIT} points each`:''}.`:`With no free transfer left, each costs ${HIT} points.`}</span></div>${body}`;
   }
   const wi = nm ? `<div class="wi"><div><b>${nm} transfer${nm>1?'s':''} made</b> <span>${state.moves.map(m=>`${esc(by.get(m.o).name)} to ${esc(by.get(m.i).name)}`).join(', ')}</span></div>
     <div class="wn"><span><b>${sg2(L.xiPts-base0)}</b> points</span><span><b>${hitSoFar?'\u2212'+hitSoFar:'0'}</b> hit</span><span><b>${sg2(L.xiPts-base0-hitSoFar)}</b> net</span></div>
@@ -1239,29 +1257,34 @@ function wcCtx(){
   const by = new Map(state.data.players.map(p=>[p.code,p])), sq = W.squad.map(x=>by.get(x.code));
   const owned = new Map(W.squad.map(x=>[x.code,x.sell]));
   const B = Math.round((W.bank + W.squad.reduce((t,x)=>t+x.sell,0))*10)/10;
-  const key = [hz, B, W.squad.map(x=>x.code).sort().join(','), [...state.banned].sort().join(','), state.dall, JSON.stringify(state.dcap)].join('|');
+  const key = [hz, B, W.squad.map(x=>x.code).sort().join(','), [...state.banned].sort().join(','), state.dall, JSON.stringify(state.dcap), state.fhgw].join('|');
   return {T, hz, H, W, sq, owned, B, key};
 }
-function runWild(){
+function runWild(keepFh){
   const c = wcCtx(); if(!c) return; const d = state.data;
+  const f0 = fhIdx(), E = f0>=0 && f0<c.hz && c.hz>=2 ? {d:fhData(d,f0), hz:c.hz-1, f:f0} : {d, hz:c.hz, f:-1};      // a planned free hit week is taken out of the wildcard's data
+  const back = r => r ? r.squad.map(x => d.players.find(p=>p.code===x.code)) : null;
   const st = state.wc = {key:c.key, busy:true, done:0, fh:[], wild:null, wk:[]};
   const upd = () => { const b = $('#wcbox'); if(b) b.innerHTML = wcHTML(); };
   upd();
   setTimeout(() => {
-    st.wild = solveSquad(d, c.H, c.B, new Set(), state.banned, 8, c.owned); st.done++; upd();
+    const w0 = solveSquad(E.d, c.H, c.B, new Set(), state.banned, 8, c.owned); st.wild = Object.assign({}, w0, {squad:back(w0)}); st.done++; upd();
     let g = 0, k = 1;
     // a wildcard played in a later gameweek: the best squad for the next H weeks from then (weeks past the shown ones only exist so late starts have a full window)
     const nextW = () => {
       if(state.wc!==st) return;
       if(k>=c.H){ st.busy = false; upd(); return; }
-      const dk = {squad:d.squad, players:d.players.map(p => Object.assign({}, p, {ep:p.ep.slice(k, k+c.H)}))};
-      const r = solveSquad(dk, Math.min(c.H, c.hz-k), c.B, new Set(), state.banned, 4, c.owned);
-      st.wk[k] = r ? r.squad.map(x => d.players.find(p=>p.code===x.code)) : null;
+      if(k===E.f){ st.wk[k] = null; k++; st.done++; upd(); setTimeout(nextW, 10); return; }          // the free hit week: no wildcard that week
+      const ek = E.f>=0 && k>E.f ? k-1 : k;
+      const dk = {squad:d.squad, players:E.d.players.map(p => Object.assign({}, p, {ep:p.ep.slice(ek, ek+c.H)}))};
+      const r = solveSquad(dk, Math.min(c.H, E.hz-ek), c.B, new Set(), state.banned, 4, c.owned);
+      st.wk[k] = back(r);
       k++; st.done++; upd(); setTimeout(nextW, 10);
     };
     const next = () => {
       if(state.wc!==st) return;
-      if(g>=c.H){ st.wk[0] = st.wild.squad; k = 1; setTimeout(nextW, 10); return; }
+      if(keepFh && g===0){ st.fh = keepFh.slice(); st.done += c.H; g = c.H; }
+      if(g>=c.H){ st.wk[0] = E.f===0 ? null : st.wild.squad; k = 1; setTimeout(nextW, 10); return; }
       const dg = {squad:d.squad, players:d.players.map(p => Object.assign({}, p, {ep:[p.ep[g]]}))};
       const r = solveSquad(dg, 1, c.B, new Set(), state.banned, 4, c.owned);
       const sqg = r ? r.squad.map(x => d.players.find(p=>p.code===x.code)) : null;
@@ -1284,29 +1307,36 @@ function wcPanel(c, st, fh){
     return `<tr class="pos-${p.pos} ${st_?'s':'b'}"><td class="pn"><span class="chip">${p.pos}</span>${esc(p.name)}${cap?'<em class="cm">C</em>':''}${state.wcv!=='me'&&!mine.has(p.code)?'<em class="nw">NEW</em>':''}${medical(p)}</td><td>${p.team} £${p.price.toFixed(1)}</td><td>${p.fx[g]==='BLANK'?'-':esc(p.fx[g])}</td><td class="pe">${p.fx[g]==='BLANK'?'-':f1(p.ep[g])}</td></tr>`;
   }).join('');
   return `<div class="wcp"><div class="wcv" role="group" aria-label="Squad to show">${views.map(v=>`<button type="button" data-wcv="${v[0]}" aria-pressed="${state.wcv===v[0]}"${v[2]?'':' disabled'}>${v[1]}</button>`).join('')}</div>
-    <div class="wch">GW ${d.horizon[g]}: <b>${f1(pk.pts)}</b> points from the XI, ${pk.shape}, captain ${esc(short(pk.cap.name))}</div>
+    <div class="wch">GW ${d.horizon[g]}: <b>${f1(pk.pts)}</b> points from the XI, ${pk.shape}, captain ${esc(short(pk.cap.name))}${state.fhgw!==d.horizon[g]?` <button type="button" class="fhb" data-fhset="${d.horizon[g]}">Plan free hit here</button>`:''}</div>
     <table class="wl"><tbody>${rows}</tbody></table>
     <div class="sqnote">Shaded rows are the XI, faded rows the bench.</div></div>`;
+}
+function fhCtl(bestGw, ff){
+  if(ff>=0) return `<div class="wi limw"><b>Free hit planned in GW ${state.fhgw}.</b> That week is left out of the wildcard figures below, the suggested transfers and the squad builder. <button type="button" class="fhb" data-fhclr="1">Clear</button></div>`;
+  return bestGw!=null ? `<div class="wi limw"><span>If you will play your free hit in GW ${bestGw}, plan it so that week is ignored for transfers and the wildcard.</span> <button type="button" class="fhb" data-fhset="${bestGw}">Plan free hit in GW ${bestGw}</button></div>` : '';
 }
 function wcHTML(){
   const c = wcCtx(); if(!c) return '';
   const st = state.wc;
   if(!st || st.key!==c.key) return `<div class="wc"><div class="wh"><b>Wildcard and free hit</b><span>Simulates a wildcard (best 15 for the whole period) and a free hit for each week, using £${c.B.toFixed(1)}m, the value of your squad plus bank, and compares both with your team.</span></div><button type="button" class="do" id="wc-run">Simulate</button></div>`;
-  const d = state.data, hz = c.hz, H = c.H, mine = weekly(c.sq, hz), tot = a => a.slice(0,H).reduce((x,y)=>x+y,0);
+  const d = state.data, hz = c.hz, H = c.H, mine = weekly(c.sq, hz), ff = (() => { const f = fhIdx(); return f>=0 && f<hz && hz>=2 ? f : -1; })();
+  const win = k => { const a = []; for(let h=k; h<hz && a.length<H; h++) if(h!==ff) a.push(h); return a; };      // the next H weeks from k, leaving out a planned free hit week
+  const tot = a => win(0).reduce((x,h)=>x+a[h],0);
   if(!st.wild) return `<div class="wc"><div class="wh"><b>Wildcard and free hit</b><span>Working out the best squad...</span></div></div>`;
   const wcw = weekly(st.wild.squad, hz), wcTot = tot(wcw), myTot = tot(mine);
   const fh = st.fh.map(f => ({g:f.g, pts:f.pts, gain:f.pts-mine[f.g], squad:f.squad}));
   const bestFH = fh.length ? fh.reduce((a,b)=>b.gain>a.gain?b:a) : null;
   const sg2 = x => (x>=0?'+':'\u2212')+Math.abs(x).toFixed(1);
-  const wk = Array.from({length:H}, (_,k) => { const sqk = st.wk[k]; if(!sqk) return null; const w = weekly(sqk, hz); const e = Math.min(hz, k+H); let cum = 0; for(let h=k; h<e; h++) cum += w[h]-mine[h]; return {k, cum, per:cum/(e-k), squad:sqk}; });
+  const wk = Array.from({length:H}, (_,k) => { const sqk = st.wk[k]; if(!sqk) return null; const w = weekly(sqk, hz), ids = win(k); let cum = 0; ids.forEach(h => { cum += w[h]-mine[h]; }); return {k, cum, per:cum/ids.length, squad:sqk}; });
   const bestWK = wk.filter(Boolean).reduce((a,b)=>!a||b.cum>a.cum?b:a, null);
   const rows = Array.from({length:H}, (_,g) => { const f = fh[g]; const best = bestFH && f && f.g===bestFH.g && !st.busy, w = wk[g], bw = bestWK && w && w.k===bestWK.k && !st.busy;
-    return `<tr data-wcg="${g}" class="${state.wcg===g?'selw':''}"><th><button type="button" data-wcg="${g}" aria-pressed="${state.wcg===g}">${d.horizon[g]}</button></th><td>${f1(mine[g])}</td><td class="${best?'bwc':''}">${f?f1(f.pts):'...'}${f?`<small class="${f.gain>=0?'up':'dn'}">${sg2(f.gain)}</small>`:''}${best?'<u>FH</u>':''}</td><td class="${bw?'bwc':''}">${w?sg2(w.cum)+`<small class="${w.cum>=0?'up':'dn'}">${sg2(w.per)}/wk</small>`:'...'}${bw?'<u>WC</u>':''}</td></tr>`; }).join('');
+    return `<tr data-wcg="${g}" class="${state.wcg===g?'selw':''}"><th><button type="button" data-wcg="${g}" aria-pressed="${state.wcg===g}">${d.horizon[g]}</button></th><td>${f1(mine[g])}</td><td class="${best||g===ff?'bwc':''}">${f?f1(f.pts):'...'}${f?`<small class="${f.gain>=0?'up':'dn'}">${sg2(f.gain)}</small>`:''}${best?'<u>FH</u>':''}${g===ff?'<u>SET</u>':''}</td><td class="${bw?'bwc':''}">${g===ff?'<small>free hit week</small>':w?sg2(w.cum)+`<small class="${w.cum>=0?'up':'dn'}">${sg2(w.per)}/wk</small>`:'...'}${bw?'<u>WC</u>':''}</td></tr>`; }).join('');
   const out = st.wild.squad.filter(p=>!c.sq.some(q=>q.code===p.code)).map(p=>esc(p.name)), gone = c.sq.filter(p=>!st.wild.squad.some(q=>q.code===p.code)).map(p=>esc(p.name));
   const L = lineupHTML(st.wild.squad, H, new Set(c.sq.map(p=>p.code)), true);
   return `<div class="wc"><div class="wh"><b>Wildcard and free hit</b><span>Budget £${c.B.toFixed(1)}m. The wildcard is the best squad for the whole period; a free hit is the best squad for one week only, then your team returns.${st.busy?` Working: ${st.done} of ${2*H} done.`:''}</span></div>
     <div class="sqsum"><div><b>${f1(myTot)}</b><span>your team over ${horizonLabel(H)}</span></div><div><b>${f1(wcTot)}</b><span>wildcard squad, ${sg2(wcTot-myTot)}</span></div><div><b>${bestWK&&!st.busy?'GW '+d.horizon[bestWK.k]:'...'}</b><span>${bestWK&&!st.busy?'best week to play the wildcard, '+sg2(bestWK.cum)+' over the next '+H+' weeks from then':'working out'}</span></div><div><b>${bestFH&&!st.busy?'GW '+d.horizon[bestFH.g]:'...'}</b><span>${bestFH&&!st.busy?'best free hit week, '+sg2(bestFH.gain):'working out'}</span></div></div>
     <table class="wt"><thead><tr><th>GW</th><th>Your XI</th><th>Free hit</th><th>Wildcard from here<small>next ${H} weeks</small></th></tr></thead><tbody>${rows}</tbody></table>
+    ${fhCtl(bestFH && !st.busy ? d.horizon[bestFH.g] : null, ff)}
     ${wcPanel(c, st, fh)}
     <p class="sqnote">Each figure is the best XI that week with the captain doubled. The free hit column rebuilds the whole squad for that week alone, so it is always at least as high. The wildcard brings in ${out.length} new players and removes ${gone.length}. 'Wildcard from here' is the total gain over the next ${H} gameweeks from playing the wildcard in that week, with your current team until then (the figure underneath is per week); it ignores any transfers you would make in the meantime. No transfer hits are involved.</p>
     <details><summary>Wildcard squad</summary>${L.html}</details>
@@ -1334,7 +1364,9 @@ function buildSquad(){
   const hz = +$('#sq-hz').value || state.data.horizon.length;
   $('#sqout').innerHTML = '<div class="empty">Building...</div>';
   setTimeout(() => {
-    state.squad = solveSquad(state.data, hz, state.budget, state.locked, state.banned, 12);
+    const X = fhEff(state.data, hz), by = new Map(state.data.players.map(p=>[p.code,p]));
+    state.squad = solveSquad(X.d, X.hz, state.budget, state.locked, state.banned, 12);
+    if(state.squad && X.f>=0) state.squad.squad = state.squad.squad.map(p => by.get(p.code));
     if(!state.squad) $('#sqout').innerHTML = '<div class="empty">No legal squad fits this budget with the players kept. Raise the budget or release a kept player.</div>';
     else renderSquad();
   }, 20);
