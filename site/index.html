@@ -1014,16 +1014,14 @@ function transferOptions(data, hz, T, sq){
       const q = cur.slice(); q[a] = ob(p);
       const e1 = isDef(p.pos) ? defExcess(q.map(o=>o.p)) : e0;   // never leave more players over your club limit than you started with
       if(e1 > e0) continue;
-      const fix = e1 < e0;                                          // a move that brings the squad back inside the limit
       const gain1 = lineupScore(q, E, 1, 0) - base1;          // it has to pay off in the coming gameweek, or it can wait
-      if(gain1 <= 0.005 && !fix) continue;
+      if(gain1 <= 0.005) continue;
       const gain = lineupScore(q, E, hz, 0) - base;
-      if(gain > 0.005 || fix) out.push({out:po, inn:p, sell, gain, gain1, fix, left:bank+sell-p.price});
+      if(gain > 0.005) out.push({out:po, inn:p, sell, gain, gain1, left:bank+sell-p.price});
     }
   });
-  out.sort((x,y)=>(y.fix-x.fix) || y.gain-x.gain);
-  const fixes = out.filter(o=>o.fix).slice(0,8), rest = out.filter(o=>!o.fix);
-  return {base, opts:fixes.concat(rest).slice(0,NOPT), total:out.length, over:e0};
+  out.sort((x,y)=>y.gain-x.gain);
+  return {base, opts:out.slice(0,NOPT), total:out.length, over:e0};
 }
 
 /* Best set of N transfers made together (N = 2 to 5). Local search over (player out, player in) slots with a penalty for overspending,
@@ -1054,13 +1052,13 @@ function comboSearch(data, hz, T, sq, n, ban, nStarts){
     let exc = 0; for(const t in dc) exc += Math.max(0, dc[t]-capFor(t));
     if(exc > e0) return null;                       // never end with more players over the club limit than now
     const deficit = Math.max(0, spend - got - bank10), gain = lineupScore(arr, E, hz, 0) - base;
-    return {gain, deficit, exc, val: gain - 0.5*deficit - 4*exc, arr};
+    return {gain, deficit, exc, val: gain - 0.5*deficit, arr};
   };
   const seen = new Map();
   const finish = sl => {
     const r = evs(sl); if(!r || r.deficit>0) return;
-    const gain1 = lineupScore(r.arr, E, 1, 0) - base1; if(gain1 <= 0.005 && !(r.exc < e0)) return;
-    for(let i=0;i<sl.length;i++){ const r2 = evs(sl.filter((_,j)=>j!==i)); if(r2 && r2.deficit===0 && r2.exc <= r.exc && r2.gain > r.gain - 0.15) return; }   // a transfer that adds nothing
+    const gain1 = lineupScore(r.arr, E, 1, 0) - base1; if(gain1 <= 0.005) return;
+    for(let i=0;i<sl.length;i++){ const r2 = evs(sl.filter((_,j)=>j!==i)); if(r2 && r2.deficit===0 && r2.gain > r.gain - 0.15) return; }   // a transfer that adds nothing
     const key = sl.map(x=>x.a).sort().join(',')+'|'+sl.map(x=>x.c.p.code).sort().join(',');   // same players out and in, whichever way they are paired
     if(!seen.has(key)) seen.set(key, {sl:sl.slice().sort((x,y)=>x.a-y.a), gain:r.gain, gain1, left:(bank10 + sl.reduce((t,x)=>t+sell10[x.a]-x.c.price10,0))/10});
   };
@@ -1210,14 +1208,14 @@ function renderTeam(hz, T){
         <button type="button" class="do" data-do="${i}">Make this transfer</button></div>`;
     }
     return `<div class="to pos-${o.inn.pos}${open?' open':''}"><button type="button" class="tr" data-opt="${i}" aria-expanded="${open}">
-      <span class="tl"><span class="in"><em>IN</em>${o.fix?'<em class="fx">fixes limit</em>':''}${medical(o.inn)}<b>${esc(o.inn.name)}</b> <small>${o.inn.team} ${o.inn.pos} £${o.inn.price.toFixed(1)}m${o.inn.own!=null?' · '+o.inn.own.toFixed(1)+'%':''}</small>${pxBadge(o.inn,'in')}</span>
+      <span class="tl"><span class="in"><em>IN</em>${medical(o.inn)}<b>${esc(o.inn.name)}</b> <small>${o.inn.team} ${o.inn.pos} £${o.inn.price.toFixed(1)}m${o.inn.own!=null?' · '+o.inn.own.toFixed(1)+'%':''}</small>${pxBadge(o.inn,'in')}</span>
       <span class="ot"><em>OUT</em><b>${esc(o.out.name)}</b> <small>${o.out.team} £${o.sell.toFixed(1)}m</small>${pxBadge(o.out,'out')}</span></span>
       <span class="tg"><b>${sg2(o.gain)}</b>${hit?`<small>${sg2(o.gain-hit)} after hit</small>`:`<small>${sg2(o.gain1)} in GW ${d.horizon[0]}</small>`}</span></button>${det}</div>`;
   }).join('');
   const ntSel = `<label class="nts">Transfers together<select id="nt" aria-label="How many transfers to combine">${[1,2,3,4,5].map(k=>`<option value="${k}"${k===nt?' selected':''}>${k===1?'1 (single moves)':k+' at once'}</option>`).join('')}</select></label>`;
   const hitN = k => HIT*Math.max(0, k-ftLeft);
   const dcs = defCounts(sq), overs = Object.keys(dcs).filter(t => dcs[t] > capFor(t)).map(t => `${t} has ${dcs[t]} goalkeepers and defenders (limit ${capFor(t)})`);
-  const limWarn = overs.length ? `<div class="wi limw"><b>Over your club limit:</b> ${overs.join('; ')}. Suggestions never add to this, and moves that bring it back inside the limit are listed first, marked "fixes limit", even if they gain little.</div>` : '';
+  const limWarn = overs.length ? `<div class="wi limw"><b>Over your club limit:</b> ${overs.join('; ')}. Suggestions will not add to this, but they do not try to fix it either.</div>` : '';
   const fhWarn = X.f>=0 ? `<div class="wi limw"><b>Free hit planned in GW ${state.fhgw}:</b> that week is left out, so these suggestions are judged on the other weeks only. <button type="button" class="fhb" data-fhclr="1">Clear</button></div>` : '';
   let lst;
   if(nt===1){
