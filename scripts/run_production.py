@@ -42,6 +42,24 @@ def live_bootstrap() -> dict | None:
         return None
 
 
+POS_FROM_TYPE = {1: "GKP", 2: "DEF", 3: "MID", 4: "FWD"}
+
+
+def live_extras(bs, known) -> dict:
+    """Players the live feed lists that the data repo's player table does not have yet (new registrations): code -> name and position."""
+    out = {}
+    for e in (bs or {}).get("elements", []):
+        c = int(e["code"])
+        if c not in known:
+            out[c] = {"web_name": e["web_name"], "position": POS_FROM_TYPE.get(e["element_type"])}
+    return out
+
+
+def player_row(players, extra, pc):
+    """The player's name/position row from the data repo, or from the live feed when the data repo has not caught up."""
+    return players.loc[pc] if pc in players.index else extra.get(int(pc))
+
+
 def load_deadlines(src) -> dict:
     """gameweek -> deadline (UTC) from the data repo's gameweek summaries."""
     try:
@@ -93,6 +111,9 @@ def main() -> None:
     except Exception as e:  # noqa: BLE001
         notes.append(f"Price/ownership snapshot unavailable ({type(e).__name__}).")
     bs = live_bootstrap()
+    extra = live_extras(bs, set(players.index))
+    if extra:
+        notes.append(f"{len(extra)} player(s) are in the live feed but not yet in the data repo's player table: {', '.join(v['web_name'] for v in extra.values())}.")
     if bs:
         el = pd.DataFrame(bs["elements"])
         tcode = {t["id"]: t["code"] for t in bs["teams"]}
@@ -158,7 +179,8 @@ def main() -> None:
     out_players = []
     for pc, grp in g.groupby("player_code"):
         grp = grp.set_index("gw").reindex(gws)
-        pl = players.loc[pc]
+        pl = player_row(players, extra, pc)
+        if pl is None or pl["position"] is None: continue
         row = {
             "code": int(pc), "name": pl["web_name"], "pos": pl["position"], "team": teams.loc[int(team_now[pc]), "short_name"],
             "price": float(price[pc]) if pc in price.index and pd.notna(price[pc]) else None,
