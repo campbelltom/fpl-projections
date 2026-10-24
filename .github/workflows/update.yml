@@ -38,7 +38,12 @@ jobs:
       - name: Run model
         env:
           FPL_SITE_PASSWORD: ${{ secrets.FPL_SITE_PASSWORD }}
-        run: python scripts/run_production.py core --out _site/data
+        run: |
+          set -o pipefail
+          python scripts/run_production.py core --out _site/data 2>&1 | tee model.log || {
+            echo "::error title=Model failed::$(tail -n 25 model.log | tr '\n' '|' | cut -c1-3000)"
+            exit 1
+          }
       - name: Assemble site
         run: cp site/index.html _site/index.html
       - uses: actions/upload-pages-artifact@v3
