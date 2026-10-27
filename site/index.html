@@ -427,7 +427,7 @@ button.fhb{font:600 .72rem var(--num);padding:5px 9px;border-radius:8px;border:0
 const $ = s => document.querySelector(s);
 const POS = ['All','GKP','DEF','MID','FWD'];
 let DEF_HZ = 8;
-const state = {pos:'All', team:'', q:'', hz:8, avail:false, sort:'total', open:null, pmin:0, pmax:99, lo:0, hi:99, data:null, intro:true, vbase:'starter', view:'players', mine:-1, ft:1, plan:null, sel:null, budget:100, locked:new Set(), banned:new Set(), squad:null, srow:null, opt:null, wc:null, wcg:null, wcv:'fh', lug:0, luo:new Set(), rpl:null, repq:'', mo:{}, mp:null, mw:null, moves:[], optList:[], dall:3, dcap:{}, keepGk:true, nt:1, combo:null, copen:null, bkadj:{}, fhgw:null};
+const state = {pos:'All', team:'', q:'', hz:8, avail:false, sort:'total', open:null, pmin:0, pmax:99, lo:0, hi:99, data:null, intro:true, vbase:'starter', view:'players', mine:-1, ft:1, plan:null, sel:null, budget:100, locked:new Set(), banned:new Set(), squad:null, srow:null, opt:null, wc:null, wcg:null, wcv:'fh', lug:0, luo:new Set(), rpl:null, repq:'', mo:{}, mp:null, mw:null, moves:[], optList:[], dall:3, dcap:{}, keepGk:true, nt:1, cheapGk:true, combo:null, copen:null, bkadj:{}, fhgw:null};
 const store = {
   get(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } },
   set(k,v){ try{ localStorage.setItem(k,v); }catch(e){} },
@@ -654,13 +654,20 @@ function lineupScore(sq, E, hz, bw){
   }
   return tot;
 }
-function solveSquad(data, hz, budget, locked, banned, restarts, owned){
-  owned = owned || new Map();
+function solveSquad(data, hz, budget, locked, banned, restarts, owned, opts){
+  owned = owned || new Map(); opts = opts || {};
   const need = data.squad, cost = {};
   const pool = data.players.filter(p => p.price!=null && !banned.has(p.code) && p.status!=='n')   // injured/doubtful stay in; their projection already reflects the lost games
     .map((p,k) => ({code:p.code, pos:p.pos, team:p.team, price:Math.round((owned.has(p.code)?owned.get(p.code):p.price)*10), k, p}));
   const E = pool.map(o => o.p.ep.slice(0,hz));
   pool.forEach(o => { o.tot = sum(o.p.ep,hz); });
+  if(opts.cheapGk){                                   // one goalkeeper at the cheapest price: the usual bench keeper (the best of those, unless you have locked one already)
+    const gk = pool.filter(o => o.pos==='GKP'), lo = Math.min(...gk.map(o => o.price)), lg = gk.filter(o => locked.has(o.code));
+    if(lg.length<2 && !lg.some(o => o.price<=lo)){
+      const cheap = gk.filter(o => o.price<=lo).sort((a,b) => b.tot-a.tot)[0];
+      if(cheap){ locked = new Set(locked); locked.add(cheap.code); }
+    }
+  }
   const byPos = {}, cheapest = {};
   for(const pos in need){
     const all = pool.filter(o=>o.pos===pos).sort((x,y)=>y.tot-x.tot);
@@ -943,8 +950,9 @@ function curTeam(){ return state.mine>=0 ? state.data.teams[state.mine] : null; 
 
 function loadBank(){ try{ state.bkadj = JSON.parse(store.get('fpl-bkadj')||'{}') || {}; }catch(e){ state.bkadj = {}; } }
 const adjBank = T => Math.round((T.bank + (state.bkadj[T.id]||0))*10)/10;
-function loadLimits(){ try{ const v = JSON.parse(store.get('fpl-dlim')||'null'); if(v){ state.dall = [1,2,3].includes(v.all)?v.all:3; state.dcap = v.cap||{}; state.keepGk = v.kgk!==false; } }catch(e){} }
-function saveLimits(){ store.set('fpl-dlim', JSON.stringify({all:state.dall, cap:state.dcap, kgk:state.keepGk})); }
+function loadLimits(){ try{ const v = JSON.parse(store.get('fpl-dlim')||'null'); if(v){ state.dall = [1,2,3].includes(v.all)?v.all:3; state.dcap = v.cap||{}; state.keepGk = v.kgk!==false; state.cheapGk = v.cgk!==false; } }catch(e){}
+  try{ const L = JSON.parse(store.get('fpl-locks')||'[]'); const ok = new Set(state.data.players.map(p=>p.code)); state.locked = new Set(L.filter(c => ok.has(c))); }catch(e){} }
+function saveLimits(){ store.set('fpl-dlim', JSON.stringify({all:state.dall, cap:state.dcap, kgk:state.keepGk, cgk:state.cheapGk})); store.set('fpl-locks', JSON.stringify([...state.locked])); }
 /* A planned free hit: that week's points do not matter for long-term decisions (the squad is replaced for that week and then returns),
    so transfers, the wildcard and the squad builder all work on the same data with that week taken out. */
 function loadFh(){ try{ const v = JSON.parse(store.get('fpl-fhplan')||'null'); state.fhgw = v && Number.isInteger(v.gw) ? v.gw : null; }catch(e){ state.fhgw = null; } if(state.fhgw!=null && !state.data.hall.includes(state.fhgw)) state.fhgw = null; }
@@ -957,21 +965,36 @@ function setFh(gw){
   const old = state.wc; state.wc = null; if(old && !old.busy && old.wild) runWild(old.fh);       // the free hit column does not depend on the plan, so it is reused
   renderSquad();
 }
+const SOLVE_OPT = () => ({cheapGk:state.cheapGk});
+/* Players locked in must still make a legal squad: at most 2 / 5 / 5 / 3 by position, three per club, and the goalkeeper-and-defender club limit. */
+function lockProblem(){
+  const by = new Map(state.data.players.map(p=>[p.code,p])), need = state.data.squad, pc = {}, tc = {}, dc = {};
+  for(const c of state.locked){ const p = by.get(c); if(!p) continue; pc[p.pos] = (pc[p.pos]||0)+1; tc[p.team] = (tc[p.team]||0)+1; if(isDef(p.pos)) dc[p.team] = (dc[p.team]||0)+1; }
+  for(const pos in pc) if(pc[pos] > need[pos]) return `Too many locked ${pos==='GKP'?'goalkeepers':pos==='DEF'?'defenders':pos==='MID'?'midfielders':'forwards'}: a squad has ${need[pos]}.`;
+  for(const t in tc) if(tc[t] > 3) return `More than three locked players from ${t}.`;
+  for(const t in dc) if(dc[t] > capFor(t)) return `More goalkeepers and defenders locked from ${t} than your limit of ${capFor(t)}.`;
+  return '';
+}
 function renderLimits(){
+  saveLimits();
   const teams = [...new Set(state.data.players.map(p=>p.team))].sort(), n = Object.keys(state.dcap).length;
   const opt = (v,cur) => [1,2,3].map(k=>`<option value="${k}"${k===cur?' selected':''}>${k}</option>`).join('');
-  $('#lim').querySelector('summary').textContent = 'Limits and preferences' + (state.dall<3||n||!state.keepGk||state.fhgw!=null ? ' (changed)' : '');
+  $('#lim').querySelector('summary').textContent = 'Limits and preferences' + (state.dall<3||n||!state.keepGk||state.fhgw!=null||!state.cheapGk||state.locked.size ? ' (changed)' : '');
   $('#limbody').innerHTML = `<div class="lr"><span>Most goalkeepers and defenders from one club:</span><select id="lim-all" aria-label="Most goalkeepers and defenders from any club">${opt(0,state.dall)}</select><span>(3 is the game's own limit)</span></div>
     <div class="lr"><span>Club by club:</span><select id="lim-club" aria-label="Club">${teams.map(t=>`<option>${t}</option>`).join('')}</select><select id="lim-n" aria-label="Most goalkeepers and defenders">${opt(0,2)}</select><button type="button" class="chip" id="lim-set">Set</button>${Object.keys(state.dcap).sort().map(t=>`<button type="button" class="chip" data-limx="${t}" title="Remove">${t} max ${state.dcap[t]} \u00d7</button>`).join('')}</div>
     <div class="lr"><span>Free hit planned in:</span><select id="lim-fh" aria-label="Gameweek of your planned free hit"><option value="">not planned</option>${state.data.horizon.map(g=>`<option value="${g}"${g===state.fhgw?' selected':''}>GW ${g}</option>`).join('')}</select><span>(that week is left out of suggested transfers, the wildcard and the squad builder)</span></div>
+    <label class="lr kg"><input type="checkbox" id="lim-cg"${state.cheapGk?' checked':''}> Wildcard, free hit and squad builder: always include one goalkeeper at the cheapest price (£4.0)</label>
+    <div class="lr"><span>Players to lock in:</span><input id="lk-q" list="lk-list" placeholder="Type a name" autocomplete="off" aria-label="Player to lock in"><datalist id="lk-list">${state.data.players.filter(p=>p.price!=null&&!state.locked.has(p.code)).map(p=>`<option value="${esc(p.name)} (${p.team} ${p.pos} £${p.price.toFixed(1)})"></option>`).join('')}</datalist>${[...state.locked].map(c => { const p = state.data.players.find(x=>x.code===c); return p ? `<button type="button" class="chip" data-lkx="${c}" title="Unlock">${esc(p.name)} \u00d7</button>` : ''; }).join('')}</div>
+    ${lockProblem()?`<div class="sqnote" style="color:var(--bad)">${lockProblem()}</div>`:''}
     <label class="lr kg"><input type="checkbox" id="lim-gk"${state.keepGk?' checked':''}> Leave my spare goalkeeper alone (never suggest selling him)</label>
-    <div class="sqnote">Applies to the squad builder, wildcard, free hit, replacements and suggested transfers. Goalkeepers count with defenders; midfielders and forwards are not capped beyond the game's three-per-club rule.</div>`;
+    <div class="sqnote">Locked players are kept by the squad builder, wildcard and free hit, and are never sold in suggested transfers (you can also lock from a player's row in your squad). The club limit applies to the squad builder, wildcard, free hit, replacements and suggested transfers. Goalkeepers count with defenders; midfielders and forwards are not capped beyond the game's three-per-club rule.</div>`;
 }
 function limChanged(){ saveLimits(); state.wc = null; renderSquad(); }
-document.addEventListener('change', ev => { if(ev.target.id==='lim-gk'){ state.keepGk = ev.target.checked; limChanged(); return; } if(ev.target.id==='nt'){ state.nt = +ev.target.value; state.copen = null; state.opt = null; renderSquad(); return; } if(ev.target.id==='lim-all'){ state.dall = +ev.target.value; limChanged(); return; } if(ev.target.id==='lim-fh'){ setFh(ev.target.value==='' ? null : +ev.target.value); } });
+document.addEventListener('change', ev => { if(ev.target.id==='lim-gk'){ state.keepGk = ev.target.checked; limChanged(); return; } if(ev.target.id==='lim-cg'){ state.cheapGk = ev.target.checked; limChanged(); return; } if(ev.target.id==='lk-q'){ const v = ev.target.value, p = state.data.players.find(x => `${x.name} (${x.team} ${x.pos} £${x.price!=null?x.price.toFixed(1):'?'})`===v); if(p){ state.locked.add(p.code); state.combo = null; limChanged(); } return; } if(ev.target.id==='nt'){ state.nt = +ev.target.value; state.copen = null; state.opt = null; renderSquad(); return; } if(ev.target.id==='lim-all'){ state.dall = +ev.target.value; limChanged(); return; } if(ev.target.id==='lim-fh'){ setFh(ev.target.value==='' ? null : +ev.target.value); } });
 document.addEventListener('click', ev => {
   if(ev.target.id==='lim-set'){ state.dcap[$('#lim-club').value] = +$('#lim-n').value; limChanged(); }
   const x = ev.target.closest('button[data-limx]'); if(x){ delete state.dcap[x.dataset.limx]; limChanged(); }
+  const lx = ev.target.closest('button[data-lkx]'); if(lx){ state.locked.delete(+lx.dataset.lkx); state.combo = null; limChanged(); return; }
   const fs = ev.target.closest('button[data-fhset]'); if(fs){ setFh(+fs.dataset.fhset); return; }
   if(ev.target.closest('button[data-fhclr]')){ setFh(null); return; }
 });
@@ -1255,7 +1278,7 @@ function wcCtx(){
   const by = new Map(state.data.players.map(p=>[p.code,p])), sq = W.squad.map(x=>by.get(x.code));
   const owned = new Map(W.squad.map(x=>[x.code,x.sell]));
   const B = Math.round((W.bank + W.squad.reduce((t,x)=>t+x.sell,0))*10)/10;
-  const key = [hz, B, W.squad.map(x=>x.code).sort().join(','), [...state.banned].sort().join(','), state.dall, JSON.stringify(state.dcap), state.fhgw].join('|');
+  const key = [hz, B, W.squad.map(x=>x.code).sort().join(','), [...state.banned].sort().join(','), state.dall, JSON.stringify(state.dcap), state.fhgw, state.cheapGk, [...state.locked].sort().join(',')].join('|');
   return {T, hz, H, W, sq, owned, B, key};
 }
 function runWild(keepFh){
@@ -1266,7 +1289,9 @@ function runWild(keepFh){
   const upd = () => { const b = $('#wcbox'); if(b) b.innerHTML = wcHTML(); };
   upd();
   setTimeout(() => {
-    const w0 = solveSquad(E.d, c.H, c.B, new Set(), state.banned, 8, c.owned); st.wild = Object.assign({}, w0, {squad:back(w0)}); st.done++; upd();
+    const w0 = solveSquad(E.d, c.H, c.B, state.locked, state.banned, 8, c.owned, SOLVE_OPT());
+    if(!w0){ st.busy = false; st.fail = true; upd(); return; }
+    st.wild = Object.assign({}, w0, {squad:back(w0)}); st.done++; upd();
     let g = 0, k = 1;
     // a wildcard played in a later gameweek: the best squad for the next H weeks from then (weeks past the shown ones only exist so late starts have a full window)
     const nextW = () => {
@@ -1275,7 +1300,7 @@ function runWild(keepFh){
       if(k===E.f){ st.wk[k] = null; k++; st.done++; upd(); setTimeout(nextW, 10); return; }          // the free hit week: no wildcard that week
       const ek = E.f>=0 && k>E.f ? k-1 : k;
       const dk = {squad:d.squad, players:E.d.players.map(p => Object.assign({}, p, {ep:p.ep.slice(ek, ek+c.H)}))};
-      const r = solveSquad(dk, Math.min(c.H, E.hz-ek), c.B, new Set(), state.banned, 4, c.owned);
+      const r = solveSquad(dk, Math.min(c.H, E.hz-ek), c.B, state.locked, state.banned, 4, c.owned, SOLVE_OPT());
       st.wk[k] = back(r);
       k++; st.done++; upd(); setTimeout(nextW, 10);
     };
@@ -1284,7 +1309,7 @@ function runWild(keepFh){
       if(keepFh && g===0){ st.fh = keepFh.slice(); st.done += c.H; g = c.H; }
       if(g>=c.H){ st.wk[0] = E.f===0 ? null : st.wild.squad; k = 1; setTimeout(nextW, 10); return; }
       const dg = {squad:d.squad, players:d.players.map(p => Object.assign({}, p, {ep:[p.ep[g]]}))};
-      const r = solveSquad(dg, 1, c.B, new Set(), state.banned, 4, c.owned);
+      const r = solveSquad(dg, 1, c.B, state.locked, state.banned, 4, c.owned, SOLVE_OPT());
       const sqg = r ? r.squad.map(x => d.players.find(p=>p.code===x.code)) : null;
       st.fh.push(sqg ? {g, squad:sqg, pts:pickGW(sqg,g).pts} : {g, squad:null, pts:0});
       g++; st.done++; upd(); setTimeout(next, 10);
@@ -1315,8 +1340,10 @@ function fhCtl(bestGw, ff){
 }
 function wcHTML(){
   const c = wcCtx(); if(!c) return '';
-  const st = state.wc;
-  if(!st || st.key!==c.key) return `<div class="wc"><div class="wh"><b>Wildcard and free hit</b><span>Simulates a wildcard (best 15 for the whole period) and a free hit for each week, using £${c.B.toFixed(1)}m, the value of your squad plus bank, and compares both with your team.</span></div><button type="button" class="do" id="wc-run">Simulate</button></div>`;
+  const st = state.wc, lp = lockProblem();
+  if(lp) return `<div class="wc"><div class="wh"><b>Wildcard and free hit</b><span>${lp} Change the locked players under Limits and preferences.</span></div></div>`;
+  if(st && st.key===c.key && st.fail) return `<div class="wc"><div class="wh"><b>Wildcard and free hit</b><span>No legal squad fits \u00a3${c.B.toFixed(1)}m with the locked players and limits you have set. Release a locked player or raise a limit.</span></div><button type="button" class="do" id="wc-run">Try again</button></div>`;
+  if(!st || st.key!==c.key) return `<div class="wc"><div class="wh"><b>Wildcard and free hit</b><span>Simulates a wildcard (best 15 for the whole period) and a free hit for each week, using £${c.B.toFixed(1)}m, the value of your squad plus bank, and compares both with your team.${state.cheapGk?' One goalkeeper is kept at the cheapest price.':''}${state.locked.size?` ${state.locked.size} locked player${state.locked.size>1?'s are':' is'} kept.`:''}</span></div><button type="button" class="do" id="wc-run">Simulate</button></div>`;
   const d = state.data, hz = c.hz, H = c.H, mine = weekly(c.sq, hz), ff = (() => { const f = fhIdx(); return f>=0 && f<hz && hz>=2 ? f : -1; })();
   const win = k => { const a = []; for(let h=k; h<hz && a.length<H; h++) if(h!==ff) a.push(h); return a; };      // the next H weeks from k, leaving out a planned free hit week
   const tot = a => win(0).reduce((x,h)=>x+a[h],0);
@@ -1360,10 +1387,11 @@ function pickReplacement(inn){
 }
 function buildSquad(){
   const hz = +$('#sq-hz').value || state.data.horizon.length;
+  if(lockProblem()){ $('#sqout').innerHTML = `<div class="empty">${lockProblem()} Change the locked players under Limits and preferences.</div>`; return; }
   $('#sqout').innerHTML = '<div class="empty">Building...</div>';
   setTimeout(() => {
     const X = fhEff(state.data, hz), by = new Map(state.data.players.map(p=>[p.code,p]));
-    state.squad = solveSquad(X.d, X.hz, state.budget, state.locked, state.banned, 12);
+    state.squad = solveSquad(X.d, X.hz, state.budget, state.locked, state.banned, 12, null, SOLVE_OPT());
     if(state.squad && X.f>=0) state.squad.squad = state.squad.squad.map(p => by.get(p.code));
     if(!state.squad) $('#sqout').innerHTML = '<div class="empty">No legal squad fits this budget with the players kept. Raise the budget or release a kept player.</div>';
     else renderSquad();
