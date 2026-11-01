@@ -25,3 +25,11 @@ def test_player_not_in_data_repo_falls_back_to_live_feed():
     r = rp.player_row(players, extra, 499857)
     assert r["web_name"] == "Newman" and r["position"] == "DEF"
     assert rp.player_row(players, extra, 5) is None
+
+
+def test_pending_matches_detects_unloaded_player_stats():
+    import pandas as pd
+    from fplmodel.players import pending_matches
+    rows = [("m1", i, 90.0) for i in range(20)] + [("m2", i, 0.0) for i in range(20)] + [("m3", i, 45.0) for i in range(3)]
+    pm = pd.DataFrame(rows, columns=["match_id", "player_code", "minutes_played"])
+    assert pending_matches(pm, ["m1", "m2", "m3", "m4"]) == {"m2", "m3", "m4"}

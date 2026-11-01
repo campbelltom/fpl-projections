@@ -78,6 +78,9 @@ def main() -> None:
     notes: list[str] = []
 
     ctx = Context.build(a.src)
+    from fplmodel.players import PENDING
+    if PENDING:
+        notes.append(f"Player stats for {len(PENDING)} finished match(es) are not in the data yet, so they are ignored for now.")
     s = ctx.seasons[CURRENT_SEASON]
     gw0 = current_gw(s.matches)
     if gw0 is None:

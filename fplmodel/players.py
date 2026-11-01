@@ -23,9 +23,20 @@ EVENT_COLS = ["yellow_cards", "red_cards", "own_goals", "penalties_missed", "pen
 STAT_COLS = ["xg", "xa", "goals", "assists", "saves", "dc_actions", "cbit", "xgot", "total_shots", "shots_on_target"]
 
 
+PENDING: list[str] = []      # finished matches whose player stats are not in the data yet (set by build_opportunities)
+
+
+def pending_matches(pm: pd.DataFrame, match_ids, min_players: int = 14) -> set:
+    """Matches marked finished whose player-level stats have not been ingested yet: fewer than `min_players` players with minutes.
+    Treating such a match as played would show every player of both teams as unused (0 minutes) and drag their start odds down."""
+    n = pm[pm["minutes_played"].fillna(0) > 0].groupby("match_id").size()
+    return {m for m in match_ids if n.get(m, 0) < min_players}
+
+
 def build_opportunities(seasons: dict[str, Season], tm: pd.DataFrame) -> pd.DataFrame:
     """One row per (player registered to a team, finished PL match of that team)."""
     parts = []
+    PENDING.clear()
     for si, (name, s) in enumerate(seasons.items()):
         t = tm[tm["season"] == name][["match_id", "gw", "team", "opp", "is_home", "date", "xg", "sot_against", "cbit",
                                       "team_match_idx", "season_match_no"]].rename(columns={"xg": "T_xg", "sot_against": "T_sot_ag",
@@ -37,6 +48,10 @@ def build_opportunities(seasons: dict[str, Season], tm: pd.DataFrame) -> pd.Data
         o["position"] = o["player_code"].map(pos)
 
         pm = add_pen_columns(s.pms)
+        late = pending_matches(pm, set(t["match_id"]))
+        if late:
+            PENDING.extend(sorted(late))
+            o = o[~o["match_id"].isin(late)]
         PEN = ["pen_sc", "pen_ms", "pen_taken"]
         p = pm[["player_code", "match_id", "minutes_played"] + [c for c in STAT_COLS if c in pm] + PEN].copy()
         o = o.merge(p, on=["player_code", "match_id"], how="left")
