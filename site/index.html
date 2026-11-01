@@ -782,10 +782,10 @@ function lineupHTML(sq, hz, ownedSet, ro){
   const topCap = rows.reduce((a,p) => (capCount.get(p.code)||0)>(capCount.get(a.code)||0)?p:a, rows[0]);
   const xiPts = G.reduce((t,x)=>t+x.pts,0);
   // chips: triple captain adds one more copy of the captain; bench boost adds the four bench players
-  let tc = {g:0,gain:-1}, bb = {g:0,gain:-1};
+  let tc = {g:-1,gain:-1}, bb = {g:-1,gain:-1};
   const benchW = [];
-  G.forEach((x,g) => { const tg = x.cap.ep[g]; if(tg>tc.gain) tc = {g, gain:tg, p:x.cap};
-    const bg = sq.filter(p=>!x.xi.has(p.code)).reduce((t,p)=>t+p.ep[g],0); benchW.push(bg); if(bg>bb.gain) bb = {g, gain:bg}; });
+  G.forEach((x,g) => { const tg = x.cap.ep[g]; if(tg>tc.gain && chipOpen('3xc', d.horizon[g])) tc = {g, gain:tg, p:x.cap};
+    const bg = sq.filter(p=>!x.xi.has(p.code)).reduce((t,p)=>t+p.ep[g],0); benchW.push(bg); if(bg>bb.gain && chipOpen('bboost', d.horizon[g])) bb = {g, gain:bg}; });
   const head = `<tr><th class="nm">Player</th>${G.map((x,g)=>`<th class="${g===tc.g?'tcw ':''}${g===bb.g?'bbw':''}">${d.horizon[g]}${g===tc.g?'<u>TC</u>':''}${g===bb.g?'<u>BB</u>':''}</th>`).join('')}<th class="tt">XI pts</th></tr>`;
   const body = rows.map(p => {
     let starts = 0, pts = 0; const off = [];
@@ -806,8 +806,9 @@ function lineupHTML(sq, hz, ownedSet, ro){
     <tr class="ft2"><th class="nm">Captain</th>${G.map(x=>`<td title="${esc(x.cap.name)}">${esc(short(x.cap.name).slice(0,5))}</td>`).join('')}<td></td></tr>
     <tr class="ft2"><th class="nm">Shape</th>${G.map(x=>`<td>${x.shape}</td>`).join('')}<td></td></tr>
     <tr class="ft2"><th class="nm">Bench</th>${benchW.map((v,g)=>`<td${g===bb.g?' class="bbc"':''}>${f1(v)}</td>`).join('')}<td></td></tr>`;
-  const chips = `<div class="chips"><div class="cc tcw"><b>Triple captain</b><span>GW ${d.horizon[tc.g]}: ${esc(tc.p.name)}</span><em>+${f1(tc.gain)} points</em></div>
-    <div class="cc bbw"><b>Bench boost</b><span>GW ${d.horizon[bb.g]}</span><em>+${f1(bb.gain)} points</em></div></div>`;
+  const gone = (name, label) => `<div class="cc"><b>${label}</b><span>already used</span><em>back from GW 20</em></div>`;
+  const chips = `<div class="chips">${tc.g>=0 ? `<div class="cc tcw"><b>Triple captain</b><span>GW ${d.horizon[tc.g]}: ${esc(tc.p.name)}</span><em>+${f1(tc.gain)} points</em></div>` : gone('3xc','Triple captain')}
+    ${bb.g>=0 ? `<div class="cc bbw"><b>Bench boost</b><span>GW ${d.horizon[bb.g]}</span><em>+${f1(bb.gain)} points</em></div>` : gone('bboost','Bench boost')}</div>`;
   return {xiPts, tc, bb, cap:topCap, capN:capCount.get(topCap.code)||0, html:`${chips}<div class="gwt"><table><thead>${head}</thead><tbody>${body}</tbody><tfoot>${foot}</tfoot></table></div>`};
 }
 /* ---------- minutes what-ifs ---------- */
@@ -947,6 +948,10 @@ function renderPens(){
 const horizonLabel = hz => hz===1 ? 'the next gameweek' : hz+' gameweeks';
 const MEDNOTE = 'A red or amber plus marks a player who is injured, suspended or doubtful: his projection already allows for missed games, but injury news changes fast, so check before acting.';
 function curTeam(){ return state.mine>=0 ? state.data.teams[state.mine] : null; }
+/* Chips come in two sets: one for gameweeks 1 to 19 and a fresh one from 20. A chip is open in a week if it has not been used in that week's set. */
+const CHIP_NAMES = {wildcard:'Wildcard', freehit:'Free hit', bboost:'Bench boost', '3xc':'Triple captain'};
+const chipSet = gw => gw<=19 ? 1 : 2;
+function chipOpen(name, gw){ const T = curTeam(); if(!T || !T.chips) return true; return !T.chips.some(c => c.name===name && chipSet(c.event)===chipSet(gw)); }
 
 function loadBank(){ try{ state.bkadj = JSON.parse(store.get('fpl-bkadj')||'{}') || {}; }catch(e){ state.bkadj = {}; } }
 const adjBank = T => Math.round((T.bank + (state.bkadj[T.id]||0))*10)/10;
@@ -1212,6 +1217,8 @@ function renderTeam(hz, T){
   const owned = new Set(T.squad.map(x=>x.code)), L = lineupHTML(sq, hz, owned);
   const base0 = weekly(sq0, hz).reduce((a,b)=>a+b,0), ftLeft = Math.max(0, state.ft-nm), hitSoFar = HIT*Math.max(0, nm-state.ft);
   const head = `<p class="sqnote"><b>${esc(T.name||T.label)}</b>${T.manager?`, ${esc(T.manager)}`:''}. Bank £${adjBank(T).toFixed(1)}m${state.bkadj[T.id]?` (adjusted by ${state.bkadj[T.id]>0?'+':'\u2212'}£${Math.abs(state.bkadj[T.id]).toFixed(1)}m)`:''}. Squad as of gameweek ${T.gw}${T.pending?`, with ${T.pending} transfer${T.pending>1?'s':''} already made for gameweek ${d.horizon[0]}`:''}. Free transfers are an estimate, so check the number above.</p>`;
+  const chipNote = (() => { if(!T.chips) return ''; const g0 = d.horizon[0], set = chipSet(g0), used = T.chips.filter(c => chipSet(c.event)===set), left = Object.keys(CHIP_NAMES).filter(n => !used.some(c => c.name===n));
+    return `<p class="sqnote"><b>Chips:</b> ${used.length ? 'used '+used.map(c => `${CHIP_NAMES[c.name]||esc(c.name)} (GW ${c.event})`).join(', ')+'. ' : ''}${left.length ? `Still to play ${set===1?'by the GW 19 deadline':'this half'}: ${left.map(n => CHIP_NAMES[n]).join(', ')}.` : 'All chips for this half are used.'}${set===1?' A fresh set starts at GW 20.':''}</p>`; })();
   const X = fhEff(d, hz), R = transferOptions(X.d, X.hz, W, sq), hit = ftLeft>0 ? 0 : HIT; R.opts.forEach(o => { o.inn = by.get(o.inn.code); }); state.optList = R.opts;
   const sumX = (ep, n) => ep.slice(0,n).reduce((t,v,i) => t + (i===X.f ? 0 : v), 0);
   const nt = state.nt, cKey = [nm, hz, nt, state.ft, [...state.banned].join(), [...state.locked].join(), state.dall, JSON.stringify(state.dcap), state.keepGk, JSON.stringify(state.mo).length, d.generated_at, W.bank, state.fhgw].join('|');
@@ -1268,7 +1275,7 @@ function renderTeam(hz, T){
     <button type="button" id="wi-reset">Back to my team</button></div>` : '';
   const shown = nt===1 ? R.opts : (state.combo && !state.combo.busy && state.combo.res ? state.combo.res.flatMap(r => r.moves) : []);
   const pxb = pxBox(sq, shown.map(o => o.inn), shown.map(o => o.out));
-  out.innerHTML = head + wi + pxb + `<div class="sqsum"><div><b>${f1(L.xiPts)}</b><span>XI points with the captain doubled</span></div><div><b>${esc(short(L.cap.name))}</b><span>captain in ${L.capN} of ${hz} weeks</span></div><div><b>£${W.bank.toFixed(1)}m</b><span>in the bank</span></div></div>
+  out.innerHTML = head + chipNote + wi + pxb + `<div class="sqsum"><div><b>${f1(L.xiPts)}</b><span>XI points with the captain doubled</span></div><div><b>${esc(short(L.cap.name))}</b><span>captain in ${L.capN} of ${hz} weeks</span></div><div><b>£${W.bank.toFixed(1)}m</b><span>in the bank</span></div></div>
     <p class="sqnote">${MEDNOTE}</p>${L.html}<div id="wcbox">${wcHTML()}</div>${lst}`;
 }
 /* ---------- wildcard and free hit simulation ---------- */

@@ -55,5 +55,6 @@ def test_free_hit_week_is_ignored_for_squad_bank_and_purchase_prices():
     }
     t = build_team(9, "x", 4, id2code, now, start, get=lambda p: data[p])
     assert {p["code"] for p in t["squad"]} == {1000 + i for i in range(1, 16)}      # the pre-free-hit squad
+    assert t["chips"] == [{"name": "freehit", "event": 3}]
     assert t["bank"] == 1.0
     assert [p for p in t["squad"] if p["code"] == 1001][0]["sell"] == 5.2         # bought at 5.0 originally, not at the free hit price

@@ -77,4 +77,5 @@ def build_team(entry_id: int, label: str, gw0: int, id2code: dict[int, int], now
     ft = max(free_transfers(hist, gw0) - len(pending), 0)
     return {"id": entry_id, "label": label, "name": entry.get("name"), "manager": f"{entry.get('player_first_name', '')} {entry.get('player_last_name', '')}".strip(),
             "gw": last, "bank": round(bank, 1), "ft": ft, "ft_next": min(ft + 1, 5), "pending": len(pending), "squad": out,
-            "points": entry.get("summary_overall_points"), "rank": entry.get("summary_overall_rank")}
+            "points": entry.get("summary_overall_points"), "rank": entry.get("summary_overall_rank"),
+            "chips": [{"name": c["name"], "event": int(c["event"])} for c in hist.get("chips", []) if c.get("name") and c.get("event")]}
