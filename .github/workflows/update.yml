@@ -2,9 +2,9 @@ name: Update projections
 
 on:
   schedule:
-    # The data repo refreshes at 07:30 and 17:30 UTC; run 25 minutes later.
-    - cron: "55 7 * * *"
-    - cron: "55 17 * * *"
+    # Every hour, at 20 past: picks up the data repo's latest refresh (it updates several times a day, more on match days)
+    # and the live FPL feed for status, news and prices.
+    - cron: "20 * * * *"
   workflow_dispatch: {}
   push:
     branches: [main]
