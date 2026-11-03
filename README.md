@@ -17,7 +17,7 @@ Expected FPL points per player for the next 16 gameweeks (the site shows the nex
 ## Penalties and bonus points
 
 - `fplmodel/penalties.py`: penalties are modelled apart from open-play goals. A club's penalty rate comes from its own
-  decayed history; the taker share comes from penalties taken *for that club* plus FPL's `penalties_order`. A transfer
+  decayed history; the taker share comes from penalties taken *for that club*. A transfer
   resets the evidence (the player is flagged as a mover). `scripts/eval_penalties.py` scores the method on real penalties
   (86 events: actual taker picked first 69% of the time vs 28% for xG shares).
 - `fplmodel/bonus.py`: bonus points come from a per-match simulation of BPS (weights fitted by `scripts/fit_bps.py`
