@@ -156,10 +156,9 @@ class Context:
                                 prof.loc[pc, "mins_fixed"] = True
 
         # penalties: team rate and the evidence-weighted taker for each club
-        fo = status_now.drop_duplicates("player_code").set_index("player_code").get("penalties_order")
-        fo = pd.Series(dtype=float) if fo is None else pd.to_numeric(fo, errors="coerce")
+        fo = pd.Series(dtype=float)      # FPL's own penalty-taker listing is deliberately not used: the model works from the penalties actually taken
         rate, league, conv = team_rates(self.opp, asof, si, idx)
-        tw = taker_weights(self.opp, asof, si, idx, prof["team_code"], fo, prof["xg_share"], params.shrink.prior_season_weight)
+        tw = taker_weights(self.opp, asof, si, idx, prof["team_code"], fo, prof["xg_share"], params.shrink.prior_season_weight, prior_order={})
         prof = prof.join(tw[["pen_w", "pen_share", "pen_ev", "pen_n_club", "pen_n_prev", "pen_last_gw", "fpl_order", "mover", "club_matches"]])
         prof["pen_rate"] = prof["team_code"].map(rate).fillna(league)
         prof["pen_conv"] = conv

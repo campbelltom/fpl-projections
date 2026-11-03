@@ -197,10 +197,8 @@ def main() -> None:
     short = s.teams.set_index("code")["short_name"]
     for t in pens:
         t["team"] = str(short.get(t["team"], t["team"]))
-    flagged = [t for t in pens if t["status"] in ("conflict",) or any(x["mover"] for x in t["takers"])]
+    flagged = [t for t in pens if any(x["mover"] for x in t["takers"])]
     for t in flagged:
-        if t["status"] == "conflict":
-            notes.append(f"Penalty watch: {t['team']} - FPL's first-choice taker differs from who has taken the club's recent penalties.")
         for x in t["takers"]:
             if x["mover"]:
                 notes.append(f"Penalty watch: {x['name']} ({t['team']}) took {x['prev']} penalties for a previous club; role at the new club unconfirmed.")
@@ -247,7 +245,7 @@ def main() -> None:
                 row["yb"] = yb
         if pc in tw.index and (tw.loc[pc, "pen_share"] >= 0.1 or tw.loc[pc, "pen_n_club"] > 0):
             r_ = tw.loc[pc]
-            row["pen"] = {"share": round(float(r_["pen_share"]), 2), "taken": int(r_["pen_n_club"]), "fpl": None if pd.isna(r_["fpl_order"]) else int(r_["fpl_order"]),
+            row["pen"] = {"share": round(float(r_["pen_share"]), 2), "taken": int(r_["pen_n_club"]),
                          "exp": round(float(pen_exp.get(pc, 0.0)), 2), "mover": bool(r_["mover"])}
         row["total"] = round(float(sum(row["ep"])), 2)
         out_players.append(row)           # everyone is listed, even with no projection, so a status can always be checked

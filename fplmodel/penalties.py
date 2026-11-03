@@ -5,7 +5,6 @@ them is specific to a club. So this module keeps them out of the general goal-sh
 
   team rate     penalties awarded per match, decayed history, shrunk to the league rate
   taker weight  w_i = decayed penalties taken FOR THE CURRENT CLUB
-                    + a prior from FPL's own `penalties_order` (1st choice counts most)
                     + a small spread by xG share so nobody in the squad is exactly zero
   transfers     a player's penalties at a previous club do not count at his new one. A taker who has
                 moved gets only the FPL-order prior (plus a small bump if he took several before) and
@@ -108,30 +107,23 @@ def taker_weights(opp: pd.DataFrame, asof: pd.Timestamp, season_idx_now: int, te
 def team_summary(tw: pd.DataFrame, names: pd.Series, rate: pd.Series) -> list[dict]:
     """Per team: the takers ranked by weight, with the evidence and a status flag for the site.
 
-    status: confirmed   the top-weighted player has taken penalties for this club and FPL agrees
-            fpl-only    FPL lists a taker but nobody has taken one for this club (new club or no pens yet)
-            conflict    FPL's first choice is not the player with the most recent evidence
-            unclear     no first choice listed and no evidence
+    status: confirmed   someone has taken penalties for this club in the data
+            unclear     nobody has (new club or none awarded yet): shares are spread by attacking threat
     """
     out = []
     for t, g in tw.groupby("team_code"):
         g = g.sort_values("pen_w", ascending=False)
         top = g.iloc[0]
         tot_ev = float(g["pen_n_club"].sum())
-        fpl1 = g[g["fpl_order"] == 1]
         ev_lead = g.sort_values(["pen_ev", "pen_n_club"], ascending=False).iloc[0] if g["pen_ev"].max() > 0 else None
         if ev_lead is None:
-            status = "fpl-only" if len(fpl1) else "unclear"
-        elif len(fpl1) and fpl1.index[0] != ev_lead.name and ev_lead["pen_ev"] > 1.5 * float(fpl1.iloc[0]["pen_ev"]) + 0.2:
-            status = "conflict"
-        elif len(fpl1) == 0:
             status = "unclear"
         else:
             status = "confirmed"
         rows = []
-        for pc, r in g[(g["pen_w"] > 0.35) | (g["fpl_order"].notna()) | (g["pen_n_club"] > 0)].head(5).iterrows():
+        for pc, r in g[(g["pen_w"] > 0.35) | (g["pen_n_club"] > 0)].head(5).iterrows():
             rows.append({"code": int(pc), "name": str(names.get(pc, pc)), "share": round(float(r["pen_share"]), 3),
-                         "taken": int(r["pen_n_club"]), "fpl": None if pd.isna(r["fpl_order"]) else int(r["fpl_order"]),
+                         "taken": int(r["pen_n_club"]),
                          "last_gw": None if pd.isna(r["pen_last_gw"]) else int(r["pen_last_gw"]),
                          "mover": bool(r["mover"]), "prev": int(r["pen_n_prev"]), "matches": int(r["club_matches"])})
         out.append({"team": int(t), "rate": round(float(rate.get(t, np.nan)), 3), "status": status, "total": int(tot_ev),
