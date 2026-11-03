@@ -79,6 +79,8 @@ button{cursor:pointer}
 .l2 b{color:var(--ink);font-weight:600}
 .l2 .dot{opacity:.45}
 .flag{font:600 .68rem/1 var(--body);padding:2px 5px;border-radius:5px;border:1px solid currentColor;flex:none}
+.yc{display:inline-grid;place-items:center;width:.62rem;height:.82rem;margin-left:4px;border-radius:2px;background:#f6c90e;color:#3a2e00;font:800 .52rem/1 var(--num);vertical-align:-1px;transform:rotate(-8deg);box-shadow:0 0 0 1px rgba(0,0,0,.25),1px 1px 2px rgba(0,0,0,.25);flex:none}
+.yc.hot{background:#ffd400;box-shadow:0 0 0 1.5px #d4380d,1px 1px 2px rgba(0,0,0,.3)}
 .flag.d{color:var(--warn)} .flag.o{color:var(--bad)} .flag.n{color:var(--ink2)}
 .sc{min-width:0}
 .nx{display:block;font:600 .6rem/1 var(--num);color:var(--ink2);margin-top:2px;text-align:center;white-space:nowrap}
@@ -521,7 +523,7 @@ function start(d){
       return `<span>GW${x.gw}: ${s}${st}</span>`; }).join(' \u00b7 ');
     $('#prog').innerHTML = pg; $('#prog').hidden = !pg; }
   const nn = d.notes.filter(x=>!x.startsWith('Penalty watch')); const n = nn.length ? nn.map(x=>`<p>${esc(x)}</p>`).join('') : '';
-  $('#foot').innerHTML = n + `<p>Expected points under the official FPL scoring, from a team model plus a per-player model. Players with fewer than five league appearances are marked new: treat their numbers as rough. Model ${esc(d.model_version)}.</p>`;
+  $('#foot').innerHTML = n + `<p>Expected points under the official FPL scoring, from a team model plus a per-player model. Players with fewer than five league appearances are marked new: treat their numbers as rough. A small yellow card beside a name means the player is one or two yellows from a suspension (five by GW19); worth knowing before bringing him in. Model ${esc(d.model_version)}.</p>`;
   render();
 }
 
@@ -558,11 +560,22 @@ function replacement(hz){
 function minSquad(){ const d=state.data; return Object.entries(d.squad).reduce((t,[k,n])=>t+n*d.floor[k],0); }
 const sg = x => (x>=0?'+':'\u2212')+Math.abs(x).toFixed(1);
 
+function ycInfo(p){
+  const d=state.data, g=d.horizon[0]; if(!p.yc||!d.yc_rules) return null;
+  const r=d.yc_rules.find(x=>p.yc<x[0]&&g<=x[1]); if(!r) return null;
+  const left=r[0]-p.yc; if(left>2) return null;
+  return {n:p.yc, left, at:r[0], gw:r[1], ban:r[2]};
+}
+function ycard(p){
+  const y=ycInfo(p); if(!y) return '';
+  const t=`${y.n} yellow cards: ${y.left===1?'one more':'two more'} in the games up to GW${y.gw} is a ${y.ban===1?'one-match':y.ban+'-match'} ban`;
+  return `<span class="yc${y.left===1?' hot':''}" title="${t}" role="img" aria-label="${t}">${y.n}</span>`;
+}
 function flag(p){
-  if(p.status==='a') return p.low_history ? '<span class="flag n" title="Few league appearances on record">new</span>' : '';
+  if(p.status==='a') return ycard(p) + (p.low_history ? '<span class="flag n" title="Few league appearances on record">new</span>' : '');
   const cls = p.status==='d' ? 'd' : 'o';
   const txt = {d:'doubt',i:'injured',s:'suspended',u:'unavailable',n:'left'}[p.status] || p.status;
-  return `<span class="flag ${cls}" title="${esc(p.news)}">${txt}</span>`;
+  return `<span class="flag ${cls}" title="${esc(p.news)}">${txt}</span>` + ycard(p);
 }
 
 function render(){
@@ -757,7 +770,8 @@ function pickGW(squad, g){
   return {xi:new Set(xi.map(p=>p.code)), cap, cut, gk:by.GKP[0].ep[g], shape, pts: xi.reduce((t,p)=>t+p.ep[g],0) + cap.ep[g]};
 }
 const CROSS = '<svg viewBox="0 0 12 12"><path d="M6 1.5v9M1.5 6h9"/></svg>';
-function medical(p){
+function medical(p){ return medical0(p) + ycard(p); }
+function medical0(p){
   if(p.status==='a' || p.status==='n') return '';
   const t = {d:'Doubtful',i:'Injured',s:'Suspended',u:'Unavailable'}[p.status] || p.status;
   return `<span class="med ${p.status==='d'?'d':''}" title="${t}${p.news?': '+esc(p.news):''}" role="img" aria-label="${t}">${CROSS}</span>`;
@@ -806,7 +820,7 @@ function lineupHTML(sq, hz, ownedSet, ro){
       `Starts ${starts} of ${hz}. Benched when the player he is up against scores more: ` + off.slice(0,4).map(o=>`GW ${d.horizon[o.g]} (${f1(o.e)} vs ${f1(o.cut)})`).join(', ') + (off.length>4?', ...':'') + '.';
     const act = open ? `<tr class="act pos-${p.pos}"><td colspan="${hz+2}"><div class="why">${why} Price £${p.price.toFixed(1)}m${p.own!=null?`, owned by ${p.own.toFixed(1)}%`:''}.</div>
       <div class="tb"><button type="button" data-lock="${p.code}" aria-pressed="${lk}">${lk?'Kept':'Keep in squad'}</button><button type="button" data-rep="${p.code}" aria-pressed="${state.rpl===p.code}">Replace</button><button type="button" data-mp="${p.code}" aria-pressed="${state.mp===p.code}">Minutes</button>${ownedSet ? (isNew?`<button type="button" data-undo="${p.code}">Undo this transfer</button>`:'') : `<button type="button" data-ban="${p.code}">Swap out</button>`}</div>${state.rpl===p.code?repPicker(p, sq, hz, ownedSet):''}${state.mp===p.code?minsPanel(p):''}</td></tr>` : '';
-    return `<tr class="pr pos-${p.pos}"><th class="nm" scope="row">${ro?'<span class="rb">':`<button type="button" data-srow="${p.code}" aria-expanded="${open}">`}${medical(p)}<span class="n1">${esc(short(p.name))}${state.mo[p.code]&&Object.keys(state.mo[p.code]).length?'<em>MINS</em>':''}${isNew?'<em>NEW</em>':''}${lk?'<em>KEPT</em>':''}</span><span class="n2">${p.pos} ${p.team} £${p.price.toFixed(1)}</span>${ro?'</span>':'</button>'}</th>${cells}<td class="tt"><b>${f1(pts)}</b></td></tr>${act}`;
+    return `<tr class="pr pos-${p.pos}"><th class="nm" scope="row">${ro?'<span class="rb">':`<button type="button" data-srow="${p.code}" aria-expanded="${open}">`}${medical0(p)}<span class="n1">${esc(short(p.name))}${ycard(p)}${state.mo[p.code]&&Object.keys(state.mo[p.code]).length?'<em>MINS</em>':''}${isNew?'<em>NEW</em>':''}${lk?'<em>KEPT</em>':''}</span><span class="n2">${p.pos} ${p.team} £${p.price.toFixed(1)}</span>${ro?'</span>':'</button>'}</th>${cells}<td class="tt"><b>${f1(pts)}</b></td></tr>${act}`;
   }).join('');
   const foot = `<tr class="ft"><th class="nm">XI total</th>${G.map(x=>`<td><b>${f1(x.pts)}</b></td>`).join('')}<td class="tt"><b>${f1(xiPts)}</b></td></tr>
     <tr class="ft2"><th class="nm">Captain</th>${G.map(x=>`<td title="${esc(x.cap.name)}">${esc(short(x.cap.name).slice(0,5))}</td>`).join('')}<td></td></tr>

@@ -60,6 +60,10 @@ def player_row(players, extra, pc):
     return players.loc[pc] if pc in players.index else extra.get(int(pc))
 
 
+# Premier League suspension thresholds: (yellow cards, last gameweek they count in, matches banned)
+YC_RULES = [[5, 19, 1], [10, 32, 2], [15, 37, 3]]
+
+
 def gw_progress(matches, pending, gw0) -> list:
     """Per gameweek (the one in play and the one before it): matches played, and how many of those have player stats in the data."""
     out = []
@@ -118,6 +122,7 @@ def main() -> None:
     st = st_all[st_all["gw"] == st_all["gw"].max()][["player_code", "status", "chance", "news", "penalties_order"]]   # latest row available
     # price (GBP m) and ownership (%): latest snapshot row per player in the data repo (keyed id -> player_code)
     price, own = pd.Series(dtype=float), pd.Series(dtype=float)
+    yc = pd.Series(dtype=float)
     try:
         ps = pd.read_csv(Path(a.src) / "data" / CURRENT_SEASON / "playerstats.csv", usecols=["id", "gw", "now_cost", "selected_by_percent"])
         ps = ps.sort_values("gw").drop_duplicates("id", keep="last")
@@ -125,6 +130,14 @@ def main() -> None:
         ps["code"] = ps["id"].map(id2code)
         ps = ps.dropna(subset=["code"]).set_index(ps["code"].dropna().astype(int))
         price, own = ps["now_cost"].astype(float), pd.to_numeric(ps["selected_by_percent"], errors="coerce")
+        try:
+            yc = pd.to_numeric(pd.read_csv(Path(a.src) / "data" / CURRENT_SEASON / "playerstats.csv", usecols=["id", "gw", "yellow_cards"])
+                               .sort_values("gw").drop_duplicates("id", keep="last").set_index("id")["yellow_cards"], errors="coerce")
+            yc.index = yc.index.map(id2code)
+            yc = yc[yc.index.notna()]
+            yc.index = yc.index.astype(int)
+        except Exception:  # noqa: BLE001
+            yc = pd.Series(dtype=float)
     except Exception as e:  # noqa: BLE001
         notes.append(f"Price/ownership snapshot unavailable ({type(e).__name__}).")
     bs = live_bootstrap()
@@ -141,6 +154,8 @@ def main() -> None:
         team_now = tn.where(tn.notna(), team_now.reindex(tn.index)).dropna().astype(int)
         price = (el.set_index("code")["now_cost"] / 10.0)
         own = pd.to_numeric(el.set_index("code")["selected_by_percent"], errors="coerce")
+        if "yellow_cards" in el:
+            yc = pd.to_numeric(el.set_index("code")["yellow_cards"], errors="coerce")
         rules = load_rules(live=True)
     else:
         notes.append("Live FPL API not reachable on this run: status/news from the latest data snapshot.")
@@ -221,6 +236,9 @@ def main() -> None:
             "sd": round(float(grp["ep_sd"].iloc[0]), 2) if pd.notna(grp["ep_sd"].iloc[0]) else None,
             "low_history": bool(hist.get(pc, 0) < 5),
         }
+        y = yc.get(pc) if len(yc) else None
+        if y is not None and pd.notna(y) and y > 0:
+            row["yc"] = int(y)
         if pc in tw.index and (tw.loc[pc, "pen_share"] >= 0.1 or tw.loc[pc, "pen_n_club"] > 0):
             r_ = tw.loc[pc]
             row["pen"] = {"share": round(float(r_["pen_share"]), 2), "taken": int(r_["pen_n_club"]), "fpl": None if pd.isna(r_["fpl_order"]) else int(r_["fpl_order"]),
@@ -239,7 +257,7 @@ def main() -> None:
         "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "season": CURRENT_SEASON, "current_gw": int(gw0), "horizon": gws, "deadlines": {int(g): deadlines[g].isoformat() for g in gws if g in deadlines}, "model_version": params.version,
         "gw_dates": {int(gw): str(s.matches.loc[s.matches["gameweek"] == gw, "kickoff_time"].min()) for gw in gws},
-        "progress": progress, "notes": notes, "penalties": pens, "players": out_players,
+        "yc_rules": YC_RULES, "progress": progress, "notes": notes, "penalties": pens, "players": out_players,
     }
     out = Path(a.out); out.mkdir(parents=True, exist_ok=True)
     if a.no_encrypt:
