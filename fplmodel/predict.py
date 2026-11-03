@@ -128,9 +128,11 @@ def expected_points(ctx: pd.DataFrame, prof: pd.DataFrame, avail: pd.DataFrame, 
     d["p_play"] = p60 + pS
     # penalties: designated takers weighted by how much of the match they are expected to be on the pitch
     if "pen_w" in d:
-        wq = d["pen_w"].fillna(0.0) * (m_exp / 90.0)
-        tot = wq.groupby([d["match_id"], d["team"]]).transform("sum")
-        d["pen_lam_min"] = np.where(tot > 1e-9, d["pen_rate"] * d["pen_w"].fillna(0.0) / np.where(tot > 1e-9, tot, 1.0) / 90.0, 0.0)
+        me = np.asarray(m_exp, float)
+        pa = pen_allocation(d["pen_w"].fillna(0.0).to_numpy(float), np.clip(me / 90.0, 0.0, 1.0),
+                            d["match_id"].to_numpy(), d["team"].to_numpy())
+        # per-minute rate such that rate * minutes = penalties expected: pen_rate * P(he takes a penalty awarded to the team)
+        d["pen_lam_min"] = np.where(me > 1e-9, d["pen_rate"].to_numpy(float) * pa / np.where(me > 1e-9, me, 1.0), 0.0)
     d["p60_eff"] = p60
     d["m_exp"] = m_exp
 
@@ -212,6 +214,44 @@ def _components(d: pd.DataFrame, pt, rules: Rules, params: Params, bonus: BonusM
     c["_lam_g"], c["_lam_a"], c["_p_cs"], c["_p_dc"], c["_e_saves"], c["_m_exp"] = lam_g, lam_a, p_cs, p_dc, e_saves, m_exp
     c["_e_gc"], c["_p_play"] = e_gc, (p60 + pS).to_numpy()
     return c
+
+
+def pen_allocation(w, pres, match_id, team, k: int = 3) -> np.ndarray:
+    """P(player takes a penalty awarded to his team), allowing for who is on the pitch.
+
+    A penalty goes to the highest-weighted taker who is on the pitch at the time, so a player's share of the
+    penalties is (his chance of being on the pitch) x (his weight relative to the weights of whoever else is on).
+    His own weight counts in full when he is there; the others count at their on-pitch probability. The three
+    top-weighted players' presence is enumerated exactly (so when the first choice is off, the next in line takes
+    over), the rest enter through their expectation. Minutes are therefore counted once, not twice."""
+    out = np.zeros(len(w))
+    key = pd.Series(range(len(w))).groupby([match_id, team]).apply(list)
+    for idx in key:
+        idx = np.asarray(idx)
+        ww, pp = w[idx], pres[idx]
+        order = np.argsort(-ww)
+        top, rest = order[:k], order[k:]
+        r_exp = float((ww[rest] * pp[rest]).sum())
+        combos = []
+        for mask in range(1 << len(top)):
+            on = [(mask >> b) & 1 for b in range(len(top))]
+            pr = 1.0
+            for b, o in enumerate(on):
+                pr *= pp[top[b]] if o else 1.0 - pp[top[b]]
+            combos.append((pr, sum(ww[top[b]] for b, o in enumerate(on) if o), on))
+        for pr, wsum, on in combos:
+            if pr <= 0:
+                continue
+            for b, o in enumerate(on):
+                if o and wsum + r_exp > 1e-12:
+                    out[idx[top[b]]] += pr * ww[top[b]] / (wsum + r_exp)
+        for j in rest:
+            e = 0.0
+            for pr, wsum, on in combos:
+                den = wsum + r_exp - ww[j] * pp[j] + ww[j]
+                e += pr * (ww[j] / den if den > 1e-12 else 0.0)
+            out[idx[j]] = pp[j] * e
+    return out
 
 
 def aggregate_gameweek(d: pd.DataFrame) -> pd.DataFrame:

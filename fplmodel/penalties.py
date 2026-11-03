@@ -24,8 +24,8 @@ PEN_XG = 0.78            # xG that FPL-data providers assign a penalty (used to 
 
 # tunables (evaluated by scripts/eval_penalties.py)
 PRIOR_ORDER = {1: 2.0, 2: 0.6, 3: 0.25}     # pseudo-penalties given to FPL's 1st/2nd/3rd listed taker
-HL_PEN = 30.0                                # half-life of penalty evidence, in the club's matches
-SPREAD = 0.5                                 # total pseudo-penalties spread over the squad by xG share
+HL_PEN = 120.0                               # half-life of penalty evidence, in the club's matches
+SPREAD = 0.15                                # total pseudo-penalties spread over the squad by xG share
 MOVER_BUMP = 0.6                             # extra prior for a recent mover who took >= 2 for his old club
 RATE_PRIOR_MATCHES = 25.0                    # pseudo-matches pulling a team's penalty rate to the league rate
 

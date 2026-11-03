@@ -33,3 +33,15 @@ def test_pending_matches_detects_unloaded_player_stats():
     rows = [("m1", i, 90.0) for i in range(20)] + [("m2", i, 0.0) for i in range(20)] + [("m3", i, 45.0) for i in range(3)]
     pm = pd.DataFrame(rows, columns=["match_id", "player_code", "minutes_played"])
     assert pending_matches(pm, ["m1", "m2", "m3", "m4"]) == {"m2", "m3", "m4"}
+
+
+def test_penalty_allocation_counts_minutes_once():
+    import numpy as np
+    from fplmodel.predict import pen_allocation
+    m, t = np.zeros(4), np.zeros(4)
+    # a sole taker who is on the pitch 87% of the time takes about 87% of the penalties, not ~100%
+    p = pen_allocation(np.array([2.0, 0.02, 0.02, 0.02]), np.array([0.87, 0.6, 0.5, 0.3]), m, t)
+    assert 0.84 < p[0] < 0.88
+    # the penalties he misses by being off the pitch go to the others, so the team total stays near 1
+    assert 0.97 < p.sum() < 1.03
+    assert pen_allocation(np.array([2.0, 0.02]), np.array([1.0, 0.5]), np.zeros(2), np.zeros(2))[0] > 0.97
