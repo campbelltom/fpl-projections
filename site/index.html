@@ -615,6 +615,8 @@ function render(){
       <span class="sc"><span class="strip" aria-hidden="true">${bars}</span><span class="nx">${esc(nx)}</span></span>
       <span class="tot">${state.sort==='value'
         ? `<div class="a">${p.price==null?'-':sg(p._v)}</div><div class="b">${sg(p._pa)} pts</div>`
+        : state.sort==='next' && hz>1
+        ? `<div class="a">${p.fx[0]==='BLANK'?'-':f1(p.ep[0])}</div><div class="b">${hz} GWs ${f1(p._t)}</div>`
         : `<div class="a">${f1(p._t)}</div><div class="b">${hz===1?'':'GW'+d.horizon[0]+' '+f1(p.ep[0])}</div>`}</span></button>
       <div class="dwrap"><div>${open?detail(p):''}</div></div></div>`;
   }).join('') + (rows.length>300?`<div class="empty">Showing the top 300 of ${rows.length}. Use the filters to narrow down.</div>`:'');
