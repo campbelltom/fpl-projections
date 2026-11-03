@@ -60,6 +60,19 @@ def player_row(players, extra, pc):
     return players.loc[pc] if pc in players.index else extra.get(int(pc))
 
 
+def gw_progress(matches, pending, gw0) -> list:
+    """Per gameweek (the one in play and the one before it): matches played, and how many of those have player stats in the data."""
+    out = []
+    for g in (gw0 - 1, gw0):
+        m = matches[matches["gameweek"] == g]
+        if not len(m):
+            continue
+        done = m[m["finished"]]
+        out.append({"gw": int(g), "matches": int(len(m)), "played": int(len(done)),
+                    "stats": int((~done["match_id"].isin(pending)).sum())})
+    return out
+
+
 def load_deadlines(src) -> dict:
     """gameweek -> deadline (UTC) from the data repo's gameweek summaries."""
     try:
@@ -85,6 +98,7 @@ def main() -> None:
     gw0 = current_gw(s.matches)
     if gw0 is None:
         raise SystemExit("no unplayed gameweek found - season over?")
+    progress = gw_progress(s.matches, set(PENDING), gw0)
     # once a gameweek's deadline has passed nothing can change for it: plan for the next one
     deadlines = load_deadlines(a.src)
     now_utc = pd.Timestamp(datetime.now(timezone.utc))
@@ -225,7 +239,7 @@ def main() -> None:
         "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "season": CURRENT_SEASON, "current_gw": int(gw0), "horizon": gws, "deadlines": {int(g): deadlines[g].isoformat() for g in gws if g in deadlines}, "model_version": params.version,
         "gw_dates": {int(gw): str(s.matches.loc[s.matches["gameweek"] == gw, "kickoff_time"].min()) for gw in gws},
-        "notes": notes, "penalties": pens, "players": out_players,
+        "progress": progress, "notes": notes, "penalties": pens, "players": out_players,
     }
     out = Path(a.out); out.mkdir(parents=True, exist_ok=True)
     if a.no_encrypt:

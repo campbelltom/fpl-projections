@@ -53,6 +53,7 @@ button{cursor:pointer}
 .ic{width:38px;height:38px;border-radius:12px;border:0;background:var(--card);display:grid;place-items:center}
 .ic svg{width:19px;height:19px;stroke:var(--ink);fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 .sub{color:var(--ink2);font-size:.8rem;margin:2px 0 8px}
+.prog{margin-top:-6px;font-size:.72rem;opacity:.8}
 .search{width:100%;height:40px;padding:0 14px;border:0;border-radius:12px;background:var(--card);font-size:16px}
 .search::placeholder{color:var(--ink2)}
 .bar2{display:flex;align-items:center;gap:8px;margin-top:8px;font-size:.82rem;color:var(--ink2)}
@@ -377,6 +378,7 @@ button.fhb{font:600 .72rem var(--num);padding:5px 9px;border-radius:8px;border:0
       <button class="ic" id="lockbtn" type="button" aria-label="Lock"><svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg></button>
     </div>
     <div class="sub" id="meta"></div>
+    <div class="sub prog" id="prog" hidden></div>
     <div class="views sort wide" id="views" role="group" aria-label="View"><button type="button" data-v="players" aria-pressed="true">Players</button><button type="button" data-v="squad" aria-pressed="false">Squad</button><button type="button" data-v="lineups" aria-pressed="false">Lineups</button><button type="button" data-v="pens" aria-pressed="false">Penalties</button></div>
     <div id="pctl"><input class="search" id="q" type="search" placeholder="Search players" aria-label="Search players">
     <div class="bar2"><span id="count"></span><span class="sp"></span>
@@ -514,6 +516,10 @@ function start(d){
   for(const id of ['#pmin','#pmax']){ const e=$(id); e.min=state.lo; e.max=state.hi; }
   $('#pmin').value = state.pmin; $('#pmax').value = state.pmax; syncPrice();
   $('#s-next').textContent = 'GW ' + g0; loadPrices();
+  { const pg=(d.progress||[]).map(x=>{ const s=x.played<x.matches?`${x.played}/${x.matches} played`:`all ${x.matches} played`;
+      const st=x.played===0?'':(x.stats>=x.played?(x.played===x.matches?', stats in':', stats up to date'):`, stats in for ${x.stats}/${x.played}`);
+      return `<span>GW${x.gw}: ${s}${st}</span>`; }).join(' \u00b7 ');
+    $('#prog').innerHTML = pg; $('#prog').hidden = !pg; }
   const nn = d.notes.filter(x=>!x.startsWith('Penalty watch')); const n = nn.length ? nn.map(x=>`<p>${esc(x)}</p>`).join('') : '';
   $('#foot').innerHTML = n + `<p>Expected points under the official FPL scoring, from a team model plus a per-player model. Players with fewer than five league appearances are marked new: treat their numbers as rough. Model ${esc(d.model_version)}.</p>`;
   render();
