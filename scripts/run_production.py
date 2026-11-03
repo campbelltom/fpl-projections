@@ -60,8 +60,8 @@ def player_row(players, extra, pc):
     return players.loc[pc] if pc in players.index else extra.get(int(pc))
 
 
-# Premier League suspension thresholds: (yellow cards, last gameweek they count in, matches banned)
-YC_RULES = [[5, 19, 1], [10, 32, 2], [15, 37, 3]]
+from fplmodel.suspension import YC_RULES as _RULES
+YC_RULES = [list(r) for r in _RULES]
 
 
 def gw_progress(matches, pending, gw0) -> list:
@@ -168,6 +168,9 @@ def main() -> None:
 
     params, bonus = Params.load(), BonusModel.load()
     d = ctx.predict(asof, CURRENT_SEASON, gws, params, rules, st, bonus, team_now=team_now, overrides=overrides)
+    from fplmodel.suspension import YC_RULES as _YR, ban_risk, apply_ban_risk
+    risk = ban_risk(d, yc)
+    d = apply_ban_risk(d, risk)
     g = aggregate_gameweek(d)
 
     # manager squads listed in config/teams.json (public FPL endpoints; a failure only marks that team unavailable)
@@ -239,6 +242,9 @@ def main() -> None:
         y = yc.get(pc) if len(yc) else None
         if y is not None and pd.notna(y) and y > 0:
             row["yc"] = int(y)
+            yb = [round(risk.get((int(pc), gw), 0.0), 3) for gw in gws]
+            if max(yb) >= 0.01:
+                row["yb"] = yb
         if pc in tw.index and (tw.loc[pc, "pen_share"] >= 0.1 or tw.loc[pc, "pen_n_club"] > 0):
             r_ = tw.loc[pc]
             row["pen"] = {"share": round(float(r_["pen_share"]), 2), "taken": int(r_["pen_n_club"]), "fpl": None if pd.isna(r_["fpl_order"]) else int(r_["fpl_order"]),

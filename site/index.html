@@ -523,7 +523,7 @@ function start(d){
       return `<span>GW${x.gw}: ${s}${st}</span>`; }).join(' \u00b7 ');
     $('#prog').innerHTML = pg; $('#prog').hidden = !pg; }
   const nn = d.notes.filter(x=>!x.startsWith('Penalty watch')); const n = nn.length ? nn.map(x=>`<p>${esc(x)}</p>`).join('') : '';
-  $('#foot').innerHTML = n + `<p>Expected points under the official FPL scoring, from a team model plus a per-player model. Players with fewer than five league appearances are marked new: treat their numbers as rough. A small yellow card beside a name means the player is one or two yellows from a suspension (five by GW19); worth knowing before bringing him in. Model ${esc(d.model_version)}.</p>`;
+  $('#foot').innerHTML = n + `<p>Expected points under the official FPL scoring, from a team model plus a per-player model. Players with fewer than five league appearances are marked new: treat their numbers as rough. A small yellow card beside a name means the player is one or two yellows from a suspension (five by GW19); the projections already allow for the chance of him missing a game. Model ${esc(d.model_version)}.</p>`;
   render();
 }
 
@@ -568,7 +568,7 @@ function ycInfo(p){
 }
 function ycard(p){
   const y=ycInfo(p); if(!y) return '';
-  const t=`${y.n} yellow cards: ${y.left===1?'one more':'two more'} in the games up to GW${y.gw} is a ${y.ban===1?'one-match':y.ban+'-match'} ban`;
+  const t=`${y.n} yellow cards: ${y.left===1?'one more':'two more'} in the games up to GW${y.gw} is a ${y.ban===1?'one-match':y.ban+'-match'} ban`+(p.yb?`. Already priced in: about ${Math.round(100*p.yb.slice(0,4).reduce((a,b)=>a+b,0))}% chance of missing a game in the next four gameweeks`:'');
   return `<span class="yc${y.left===1?' hot':''}" title="${t}" role="img" aria-label="${t}">${y.n}</span>`;
 }
 function flag(p){
