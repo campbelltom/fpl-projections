@@ -948,7 +948,7 @@ const PSTAT = {confirmed:['Confirmed','ok'], unclear:['No history','warn']};
 function penEvidence(t){
   const tk = t.takers;
   if(t.status==='confirmed') return `${esc(tk[0].name)} has taken ${tk[0].taken} of the club's ${t.total} penalties on record.`;
-  return 'No penalty on record for this club yet. Shares are spread by attacking threat until one is taken.';
+  return 'No current player has taken a penalty for this club. Shares are spread by attacking threat until one does.';
 }
 function renderPens(){
   const d = state.data, P = (d.penalties||[]).slice();

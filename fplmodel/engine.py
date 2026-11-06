@@ -159,6 +159,10 @@ class Context:
         fo = pd.Series(dtype=float)      # FPL's own penalty-taker listing is deliberately not used: the model works from the penalties actually taken
         rate, league, conv = team_rates(self.opp, asof, si, idx)
         tw = taker_weights(self.opp, asof, si, idx, prof["team_code"], fo, prof["xg_share"], params.shrink.prior_season_weight, prior_order={})
+        # a player who has left the league (FPL status "u") is no longer anyone's penalty taker: hand his share on
+        gone = status_now.loc[status_now["status"] == "u", "player_code"].drop_duplicates()
+        tw = tw.drop(index=tw.index.intersection(gone))
+        tw["pen_share"] = tw["pen_w"] / tw.groupby("team_code")["pen_w"].transform("sum").where(lambda x: x > 0)
         prof = prof.join(tw[["pen_w", "pen_share", "pen_ev", "pen_n_club", "pen_n_prev", "pen_last_gw", "fpl_order", "mover", "club_matches"]])
         prof["pen_rate"] = prof["team_code"].map(rate).fillna(league)
         prof["pen_conv"] = conv
