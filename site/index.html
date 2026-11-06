@@ -312,6 +312,9 @@ button.fhb{font:600 .72rem var(--num);padding:5px 9px;border-radius:8px;border:0
 .lv-sc{display:grid;grid-template-columns:1fr auto 1fr;gap:8px;align-items:center;font:700 1rem var(--num)}.lv-sc span:first-child{text-align:right}
 .lv-sc em{font-style:normal;padding:2px 10px;border-radius:8px;background:var(--card2)}
 .lv-st{text-align:center;font-size:.7rem;color:var(--ink2);margin-top:2px}.lv-st.on{color:#d4380d;font-weight:700}
+.lv-lg{width:100%;border-collapse:collapse;font-size:.86rem}.lv-lg td{padding:5px 3px;border-top:1px solid var(--line)}.lv-lg td:first-child{width:1.6rem;font:700 .85rem var(--num)}
+.lv-lg td.n small{display:block;color:var(--ink2);font-size:.68rem}.lv-lg td.r{text-align:right;font:600 .9rem var(--num)}.lv-lg td.r small{display:block;color:var(--ink2);font:400 .66rem var(--body)}
+.lv-lg tr.me td{background:var(--card2)}.mv{font-size:.65rem;margin-left:3px}.mv.u{color:#2a9d57}.mv.d{color:#c0392b}
 .lv-ev{font-size:.74rem;color:var(--ink2);margin-top:5px;line-height:1.5}.lv-ev b{color:var(--ink);font-weight:600}
 .pc{background:var(--card);border-radius:14px;padding:9px 12px 8px;margin-bottom:6px}
 .ph2{display:flex;align-items:center;gap:8px;margin-bottom:4px}.ph2 b{font:700 1rem var(--num)}
@@ -1473,6 +1476,15 @@ function renderLive(){
     <div class="big">${T.pts}<small style="font-size:.8rem;font-weight:500"> pts</small></div>
     <div class="meta">${T.chip ? ({bboost:'Bench boost',freehit:'Free hit','3xc':'Triple captain',wildcard:'Wildcard'}[T.chip]||T.chip)+' active &middot; ' : ''}${T.cost ? '-'+T.cost+' for transfers &middot; ' : ''}live, with provisional bonus${T.subs.length ? ' and automatic substitutions' : ''}</div>
     ${T.xi.map(r=>prow(r,false)).join('')}${T.bench.length ? '<div class="lv-bn">Bench</div>'+T.bench.map(r=>prow(r,true)).join('') : ''}</div>` : '';
+  const lgs = L.lg || []; if(lgs.length && !lgs.some(x=>x.id===state.liveLg)) state.liveLg = lgs[0].id;
+  const G = lgs.find(x=>x.id===state.liveLg), mineIds = new Set(L.teams.map(x=>x.id));
+  const league = G ? (() => {
+    const pre = G.rows.slice().sort((a,b)=>b.pre-a.pre), preRank = new Map(pre.map((r,i)=>[r.e,i+1]));
+    const now = G.rows.map(r=>({...r, tot:r.pre+(r.gw||0)})).sort((a,b)=>b.tot-a.tot);
+    return `<div class="lv-t">${lgs.length>1 ? `<select id="lv-lg" aria-label="League">${lgs.map(x=>`<option value="${x.id}"${x.id===G.id?' selected':''}>${esc(x.name)}</option>`).join('')}</select>` : `<div class="lv-bn" style="margin:0 0 4px">${esc(G.name)}</div>`}
+      <table class="lv-lg">${now.map((r,i)=>{ const d = preRank.get(r.e)-(i+1);
+        return `<tr${mineIds.has(r.e)?' class="me"':''}><td>${i+1}<span class="mv ${d>0?'u':d<0?'d':''}">${d>0?'&#9650;'+d:d<0?'&#9660;'+(-d):''}</span></td><td class="n">${esc(r.n)}<small>${esc(r.m)}${r.chip?' &middot; '+esc(({bboost:'Bench boost',freehit:'Free hit','3xc':'Triple captain',wildcard:'Wildcard'}[r.chip]||r.chip)):''}${r.left?' &middot; '+r.left+' to play':''}</small></td><td class="r">${r.gw ?? '-'}<small>GW</small></td><td class="r">${r.tot}<small>total</small></td></tr>`; }).join('')}</table></div>`;
+  })() : '';
   const fx = L.fx.map(f => {
     const st = f.fin ? 'Full time' : f.st ? ('Live' + (f.m ? ' ' + f.m + "'" : '')) : lvTime(f.ko);
     const sc = f.st ? `${f.hs ?? 0} - ${f.as ?? 0}` : 'v';
@@ -1480,8 +1492,8 @@ function renderLive(){
     return `<div class="lv-f"><div class="lv-sc"><span>${esc(f.h)}</span><em>${sc}</em><span>${esc(f.a)}</span></div><div class="lv-st${f.st&&!f.fin?' on':''}">${st}</div>${ev?`<div class="lv-ev">${ev}</div>`:''}</div>`;
   }).join('');
   const top = (L.top||[]).slice(0,10).map(id => { const p = nm(id); return `<div class="lv-p"><span>${esc(p[0])}<small> ${esc(p[1])} ${esc(p[2])}</small></span><small>${p[4]}'</small><b>${p[3]}</b></div>`; }).join('');
-  el.innerHTML = `<div class="lv-h"><b>GW${L.gw}</b><span>${anyOn ? 'matches under way' : 'no match on right now'} &middot; updated ${lvTime(L.at)}${ageMin>12 && anyOn ? ' (running late)' : ''}</span></div>${team}${fx}<div class="lv-t"><div class="lv-bn" style="margin:0 0 4px">Top scorers this gameweek</div>${top}</div>
-   <p class="sqnote">Points use provisional bonus from BPS until the official bonus is in. The picture refreshes about every five minutes; it can run a little behind the official site.</p>`;
+  el.innerHTML = `<div class="lv-h"><b>GW${L.gw}</b><span>${anyOn ? 'matches under way' : 'no match on right now'} &middot; updated ${lvTime(L.at)}${ageMin>12 && anyOn ? ' (running late)' : ''}</span></div>${team}${league}${fx}<div class="lv-t"><div class="lv-bn" style="margin:0 0 4px">Top scorers this gameweek</div>${top}</div>
+   <p class="sqnote">Mini-league tables are ranked on points before this gameweek plus live points (up to the first 60 managers of up to three private leagues; yours are found automatically, or list league ids in config/leagues.json). Points use provisional bonus from BPS until the official bonus is in. The picture refreshes about every five minutes; it can run a little behind the official site.</p>`;
 }
 function setView(v){
   state.view = v;
@@ -1549,6 +1561,7 @@ document.addEventListener('input', ev => {
   else if(t.id==='team'){ state.team=t.value; render(); }
   else if(t.id==='hz'){ state.hz=+t.value; render(); }
   else if(t.id==='rep-q'){ state.repq=t.value; const pos=t.selectionStart; renderSquad(); const n=$('#rep-q'); if(n){ n.focus(); n.setSelectionRange(pos,pos); } }
+  else if(t.id==='lv-lg'){ state.liveLg=+t.value; renderLive(); }
   else if(t.id==='lv-team'){ state.liveTeam=t.value; renderLive(); }
   else if(t.id==='lu-gw'){ state.lug=+t.value; renderLineups(); }
   else if(t.id==='sq-team'){ state.mine=+t.value; const T=curTeam(); if(T&&T.ft!=null) state.ft=T.ft; state.squad=null; state.opt=null; state.moves=[]; state.srow=null; renderSquad(); }

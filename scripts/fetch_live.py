@@ -127,7 +127,24 @@ def build_team(label, entry_id, picks, played, done, pts, pos):
             "xi": rows(xi), "bench": rows(rest), "subs": swaps}
 
 
-def build(boot, fixtures, live, picks_by_team, now):
+def league_table(meta, standings, picks, played, done, pts, pos):
+    """Rows for one mini league: points before this gameweek and this gameweek's live points (hits included)."""
+    rows = []
+    for s in standings:
+        pk = picks.get(s["entry"])
+        row = {"e": s["entry"], "n": s["entry_name"], "m": s["player_name"], "pre": s["total"] - s["event_total"], "gw": None}
+        if pk:
+            tm = build_team("", s["entry"], pk, played, done, pts, pos)
+            row["gw"] = tm["pts"]
+            row["chip"] = tm["chip"]
+            row["left"] = sum(1 for r in tm["xi"] if r[1] and not done(r[0]))
+        else:
+            row["gw"] = s["event_total"]
+        rows.append(row)
+    return {"id": meta["id"], "name": meta["name"], "rows": rows}
+
+
+def build(boot, fixtures, live, picks_by_team, now, leagues=()):
     teams = {t["id"]: t["short_name"] for t in boot["teams"]}
     el = {e["id"]: e for e in boot["elements"]}
     pos = {i: e["element_type"] for i, e in el.items()}
@@ -158,11 +175,57 @@ def build(boot, fixtures, live, picks_by_team, now):
         tms.append(t)
         for r in t["xi"] + t["bench"]:
             need.add(r[0])
+    lg = [league_table(m, st, pk, played, done, pts, pos) for m, st, pk in leagues]
     top = sorted(pts, key=lambda e: -pts[e][0])[:15]
     need |= set(top)
     pl = {str(e): [el[e]["web_name"], teams[el[e]["team"]], POS[pos[e]], pts[e][0] if e in pts else 0,
                    pts[e][1] if e in pts else 0, pts[e][3] if e in pts else 0] for e in need if e in el}
-    return {"at": now.replace(microsecond=0).isoformat(), "fx": fx, "pl": pl, "teams": tms, "top": top}
+    return {"at": now.replace(microsecond=0).isoformat(), "fx": fx, "pl": pl, "teams": tms, "top": top, "lg": lg}
+
+
+MAX_LEAGUES, MAX_ENTRIES = 3, 60
+
+
+def league_ids(entry_id, cfg_file="config/leagues.json"):
+    """config/leagues.json (a list of ids) wins; otherwise the private classic leagues of the first tracked team."""
+    f = Path(cfg_file)
+    if f.exists():
+        return [int(x) for x in json.loads(f.read_text())][:MAX_LEAGUES]
+    ent = fetch(f"entry/{entry_id}/")
+    return [c["id"] for c in ent.get("leagues", {}).get("classic", []) if c.get("league_type") == "x"][:MAX_LEAGUES]
+
+
+def fetch_leagues(gw, tracked_picks, teams_cfg):
+    from concurrent.futures import ThreadPoolExecutor
+    out = []
+    try:
+        ids = league_ids(teams_cfg[0]["id"])
+    except Exception as e:  # noqa: BLE001
+        print(f"no leagues: {e}")
+        return out
+    have = {eid: pk for _, eid, pk in tracked_picks}
+    cache = dict(have)
+
+    def get_picks(eid):
+        if eid in cache:
+            return eid, cache[eid]
+        try:
+            return eid, fetch(f"entry/{eid}/event/{gw}/picks/", tries=2)
+        except Exception:  # noqa: BLE001
+            return eid, None
+    for lid in ids:
+        try:
+            st = fetch(f"leagues-classic/{lid}/standings/")
+        except Exception as e:  # noqa: BLE001
+            print(f"league {lid} not available: {e}")
+            continue
+        res = st["standings"]["results"][:MAX_ENTRIES]
+        need = [r["entry"] for r in res if r["entry"] not in cache]
+        with ThreadPoolExecutor(6) as ex:
+            for eid, pk in ex.map(get_picks, need):
+                cache[eid] = pk
+        out.append(({"id": lid, "name": st["league"]["name"]}, res, {r["entry"]: cache.get(r["entry"]) for r in res}))
+    return out
 
 
 def main(dest, teams_file="config/teams.json"):
@@ -181,12 +244,14 @@ def main(dest, teams_file="config/teams.json"):
     gw = ev["id"]
     live = fetch(f"event/{gw}/live/")
     picks = []
-    for t in json.loads(Path(teams_file).read_text()):
+    teams_cfg = json.loads(Path(teams_file).read_text())
+    for t in teams_cfg:
         try:
             picks.append((t["label"], t["id"], fetch(f"entry/{t['id']}/event/{gw}/picks/")))
         except Exception as e:  # noqa: BLE001
             print(f"picks for {t['label']} not available: {e}")
-    res = build(boot, fixtures, live, picks, now)
+    leagues = fetch_leagues(gw, picks, teams_cfg)
+    res = build(boot, fixtures, live, picks, now, leagues)
     res["gw"] = gw
     Path(dest).write_text(json.dumps(res, separators=(",", ":")))
     print(f"GW{gw}: {len(res['fx'])} fixtures, {len(res['teams'])} teams -> {dest}")

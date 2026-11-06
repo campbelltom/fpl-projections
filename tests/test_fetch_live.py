@@ -51,3 +51,15 @@ def test_auto_sub_keeps_formation():
 
 def test_not_done_means_no_sub():
     assert L.auto_subs(list(range(1, 12)), [12, 13, 14, 15], lambda p: p != 5, lambda p: False, POS)[1] == []
+
+
+def test_league_table_live_points_and_hits():
+    standings = [{"entry": 1, "entry_name": "A", "player_name": "Ann", "total": 100, "event_total": 30},
+                 {"entry": 2, "entry_name": "B", "player_name": "Bob", "total": 90, "event_total": 20}]
+    mk = lambda ids: {"active_chip": None, "entry_history": {"event_transfers_cost": 4},
+                      "picks": [{"element": e, "position": i + 1, "multiplier": 1 if i < 11 else 0, "is_captain": i == 0, "is_vice_captain": i == 1} for i, e in enumerate(ids)]}
+    pts = {i: (2, 90, 10, 0) for i in range(1, 16)}
+    lg = L.league_table({"id": 9, "name": "L"}, standings, {1: mk(list(range(1, 16))), 2: None}, lambda e: True, lambda e: True, pts, POS)
+    a, b = lg["rows"]
+    assert a["pre"] == 70 and a["gw"] == 2 * 11 - 4 and a["left"] == 0
+    assert b["pre"] == 70 and b["gw"] == 20                                       # no picks: falls back to the official gameweek score
