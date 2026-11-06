@@ -1,0 +1,43 @@
+name: Live scores
+
+# Publishes the live gameweek picture (scores, events, tracked teams' points with provisional bonus and auto-subs) to the orphan
+# branch "live" (live.json). Outside a match window the script publishes nothing, so this costs seconds on a quiet day.
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: live
+  cancel-in-progress: true
+
+jobs:
+  live:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Fetch live data
+        id: fetch
+        run: |
+          python scripts/fetch_live.py "$RUNNER_TEMP/live.json" | tee "$RUNNER_TEMP/live.log"
+          if [ -s "$RUNNER_TEMP/live.json" ]; then echo "have=1" >> "$GITHUB_OUTPUT"; fi
+      - name: Publish to the live branch
+        if: steps.fetch.outputs.have == '1'
+        run: |
+          set -e
+          d=$(mktemp -d)
+          cp "$RUNNER_TEMP/live.json" "$d/live.json"
+          cd "$d"
+          git init -q -b live
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add live.json
+          git commit -qm "Live $(date -u +%FT%TZ)"
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" live

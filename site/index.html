@@ -300,6 +300,19 @@ button.fhb{font:600 .72rem var(--num);padding:5px 9px;border-radius:8px;border:0
 .wt u{text-decoration:none;font:700 .5rem var(--num);background:var(--warn);color:#000;border-radius:3px;padding:1px 3px;margin-left:3px}
 .wc details summary{cursor:pointer;font:600 .85rem var(--num);padding:6px 0}
 .info.pen{margin-top:6px;color:var(--ink)}
+.lv-h{display:flex;align-items:baseline;gap:8px;margin:2px 2px 8px;font-size:.78rem;color:var(--ink2)}.lv-h b{font:700 1rem var(--num);color:var(--ink)}
+.lv-t{background:var(--card);border-radius:14px;padding:10px 12px;margin-bottom:8px}
+.lv-t .big{font:800 2.1rem/1 var(--num)}.lv-t .meta{font-size:.75rem;color:var(--ink2);margin:2px 0 8px}
+.lv-p{display:grid;grid-template-columns:minmax(0,1fr) auto 38px;gap:2px 8px;align-items:center;padding:4px 0;border-top:1px solid var(--line);font-size:.9rem}
+.lv-p small{color:var(--ink2);font-size:.7rem}.lv-p b{font:700 .95rem var(--num);text-align:right}.lv-p.off{opacity:.45}
+.lv-p .cap{display:inline-grid;place-items:center;width:1rem;height:1rem;border-radius:50%;background:var(--ink);color:var(--bg);font:700 .6rem var(--num);margin-left:5px}
+.lv-p .sub{color:#2a9d57;font-size:.7rem;margin-left:5px}.lv-p .out{color:#c0392b;font-size:.7rem;margin-left:5px}
+.lv-bn{margin-top:6px;font-size:.7rem;text-transform:uppercase;letter-spacing:.06em;color:var(--ink2)}
+.lv-f{background:var(--card);border-radius:14px;padding:9px 12px;margin-bottom:6px}
+.lv-sc{display:grid;grid-template-columns:1fr auto 1fr;gap:8px;align-items:center;font:700 1rem var(--num)}.lv-sc span:first-child{text-align:right}
+.lv-sc em{font-style:normal;padding:2px 10px;border-radius:8px;background:var(--card2)}
+.lv-st{text-align:center;font-size:.7rem;color:var(--ink2);margin-top:2px}.lv-st.on{color:#d4380d;font-weight:700}
+.lv-ev{font-size:.74rem;color:var(--ink2);margin-top:5px;line-height:1.5}.lv-ev b{color:var(--ink);font-weight:600}
 .pc{background:var(--card);border-radius:14px;padding:9px 12px 8px;margin-bottom:6px}
 .ph2{display:flex;align-items:center;gap:8px;margin-bottom:4px}.ph2 b{font:700 1rem var(--num)}
 .ph2 .pr{margin-left:auto;font:500 .7rem var(--num);color:var(--ink2)}
@@ -381,7 +394,7 @@ button.fhb{font:600 .72rem var(--num);padding:5px 9px;border-radius:8px;border:0
     </div>
     <div class="sub" id="meta"></div>
     <div class="sub prog" id="prog" hidden></div>
-    <div class="views sort wide" id="views" role="group" aria-label="View"><button type="button" data-v="players" aria-pressed="true">Players</button><button type="button" data-v="squad" aria-pressed="false">Squad</button><button type="button" data-v="lineups" aria-pressed="false">Lineups</button><button type="button" data-v="pens" aria-pressed="false">Penalties</button></div>
+    <div class="views sort wide" id="views" role="group" aria-label="View"><button type="button" data-v="players" aria-pressed="true">Players</button><button type="button" data-v="squad" aria-pressed="false">Squad</button><button type="button" data-v="lineups" aria-pressed="false">Lineups</button><button type="button" data-v="pens" aria-pressed="false">Penalties</button><button type="button" data-v="live" aria-pressed="false">Live</button></div>
     <div id="pctl"><input class="search" id="q" type="search" placeholder="Search players" aria-label="Search players">
     <div class="bar2"><span id="count"></span><span class="sp"></span>
       <div class="sort" role="group" aria-label="Sort by"><button id="s-total" type="button"></button><button id="s-next" type="button"></button><button id="s-value" type="button">Value</button></div></div></div>
@@ -390,6 +403,7 @@ button.fhb{font:600 .72rem var(--num);padding:5px 9px;border-radius:8px;border:0
     <div id="mobar" class="mobar" hidden></div>
     <section id="lineupview" hidden></section>
     <section id="pensview" hidden></section>
+    <section id="liveview" hidden></section>
     <section id="squadview" hidden>
       <div class="sqctl">
         <label class="wide">Start from<select id="sq-team" aria-label="Start from"></select></label>
@@ -1422,12 +1436,60 @@ function buildSquad(){
     else renderSquad();
   }, 20);
 }
+
+/* ---------- live scores: scores, events and the tracked teams' points, published every five minutes during matches (live branch) ---------- */
+const LIVE_URL = 'https://raw.githubusercontent.com/campbelltom/fpl-projections/live/live.json';
+let liveTimer = null;
+function loadLive(force){
+  if(!force && state.liveAt && Date.now()-state.liveAt < 45e3) return Promise.resolve();
+  state.liveAt = Date.now();
+  return fetch(LIVE_URL+'?t='+Math.floor(Date.now()/60e3), {cache:'no-store'}).then(r => r.ok ? r.json() : null).then(j => {
+    state.live = j || state.live || null; state.liveTried = true; if(state.view==='live') renderLive();
+  }).catch(() => { state.liveTried = true; if(state.view==='live') renderLive(); });
+}
+const lvTime = iso => { try { return new Date(iso).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}); } catch(e){ return ''; } };
+function lvEvents(L, f){
+  const nm = id => { const p = L.pl[id]; return p ? p[0] : '?'; };
+  const group = (kinds) => { const c = new Map(); f.ev.filter(e => kinds.includes(e[0])).forEach(e => c.set(e[1], (c.get(e[1])||0)+e[3])); return [...c].map(([id,n]) => esc(nm(id)) + (n>1?' '+n:'')).join(', '); };
+  const bits = [['Goals',group(['g'])],['Assists',group(['a'])],['Own goals',group(['og'])],['Pens missed',group(['pm'])],['Pens saved',group(['ps'])],['Yellow',group(['yc'])],['Red',group(['rc'])]];
+  return bits.filter(b=>b[1]).map(b => `<b>${b[0]}</b> ${b[1]}`).join(' &middot; ');
+}
+function renderLive(){
+  const el = $('#liveview'), L = state.live;
+  if(!L){ el.innerHTML = `<div class="empty">${state.liveTried ? 'No live data yet. It appears here, refreshed every five minutes, once a gameweek has matches under way.' : 'Loading live scores...'}</div>`; return; }
+  const ageMin = Math.round((Date.now()-new Date(L.at).getTime())/60e3);
+  const anyOn = L.fx.some(f => f.st && !f.fin);
+  if(!state.liveTeam || !L.teams.some(t=>t.label===state.liveTeam)){
+    const mine = state.mine>=0 && state.data.teams[state.mine] ? state.data.teams[state.mine].label : null;
+    state.liveTeam = (L.teams.find(t=>t.label===mine) || L.teams[0] || {}).label;
+  }
+  const T = L.teams.find(t=>t.label===state.liveTeam);
+  const nm = id => L.pl[id] ? L.pl[id] : ['?','','',0,0,0];
+  const swapIn = T ? new Set(T.subs.map(s=>s[1])) : new Set(), swapOut = T ? new Set(T.subs.map(s=>s[0])) : new Set();
+  const prow = (r, bench) => { const p = nm(r[0]), played = r[3]>0, tag = r[0]===T.cap ? '<span class="cap">C</span>' : '';
+    const sub = swapIn.has(r[0]) ? '<span class="sub">auto-sub in</span>' : swapOut.has(r[0]) ? '<span class="out">auto-sub out</span>' : '';
+    return `<div class="lv-p${played||!bench&&r[1]?'':' off'}"><span>${esc(p[0])}${tag}${sub}<small> ${esc(p[1])} ${esc(p[2])}</small></span><small>${played?r[3]+"'":'-'}</small><b>${r[1]>1?r[2]*r[1]:r[2]}</b></div>`; };
+  const team = T ? `<div class="lv-t"><select id="lv-team" aria-label="Team">${L.teams.map(t=>`<option${t.label===T.label?' selected':''}>${esc(t.label)}</option>`).join('')}</select>
+    <div class="big">${T.pts}<small style="font-size:.8rem;font-weight:500"> pts</small></div>
+    <div class="meta">${T.chip ? ({bboost:'Bench boost',freehit:'Free hit','3xc':'Triple captain',wildcard:'Wildcard'}[T.chip]||T.chip)+' active &middot; ' : ''}${T.cost ? '-'+T.cost+' for transfers &middot; ' : ''}live, with provisional bonus${T.subs.length ? ' and automatic substitutions' : ''}</div>
+    ${T.xi.map(r=>prow(r,false)).join('')}${T.bench.length ? '<div class="lv-bn">Bench</div>'+T.bench.map(r=>prow(r,true)).join('') : ''}</div>` : '';
+  const fx = L.fx.map(f => {
+    const st = f.fin ? 'Full time' : f.st ? ('Live' + (f.m ? ' ' + f.m + "'" : '')) : lvTime(f.ko);
+    const sc = f.st ? `${f.hs ?? 0} - ${f.as ?? 0}` : 'v';
+    const ev = f.st ? lvEvents(L, f) : '';
+    return `<div class="lv-f"><div class="lv-sc"><span>${esc(f.h)}</span><em>${sc}</em><span>${esc(f.a)}</span></div><div class="lv-st${f.st&&!f.fin?' on':''}">${st}</div>${ev?`<div class="lv-ev">${ev}</div>`:''}</div>`;
+  }).join('');
+  const top = (L.top||[]).slice(0,10).map(id => { const p = nm(id); return `<div class="lv-p"><span>${esc(p[0])}<small> ${esc(p[1])} ${esc(p[2])}</small></span><small>${p[4]}'</small><b>${p[3]}</b></div>`; }).join('');
+  el.innerHTML = `<div class="lv-h"><b>GW${L.gw}</b><span>${anyOn ? 'matches under way' : 'no match on right now'} &middot; updated ${lvTime(L.at)}${ageMin>12 && anyOn ? ' (running late)' : ''}</span></div>${team}${fx}<div class="lv-t"><div class="lv-bn" style="margin:0 0 4px">Top scorers this gameweek</div>${top}</div>
+   <p class="sqnote">Points use provisional bonus from BPS until the official bonus is in. The picture refreshes about every five minutes; it can run a little behind the official site.</p>`;
+}
 function setView(v){
   state.view = v;
   document.querySelectorAll('#views button').forEach(x=>x.setAttribute('aria-pressed',x.dataset.v===v));
-  const sqv = v==='squad', pv = v==='pens', lv = v==='lineups', other = sqv||pv||lv;
-  $('#pctl').hidden = other; $('#list').hidden = other; $('#squadview').hidden = !sqv; $('#pensview').hidden = !pv; $('#lineupview').hidden = !lv; document.querySelector('.dock').hidden = other;
-  if(sqv) renderSquad(); else if(pv) renderPens(); else if(lv) renderLineups(); else render();
+  const sqv = v==='squad', pv = v==='pens', lv = v==='lineups', lvv = v==='live', other = sqv||pv||lv||lvv;
+  $('#pctl').hidden = other; $('#list').hidden = other; $('#squadview').hidden = !sqv; $('#pensview').hidden = !pv; $('#lineupview').hidden = !lv; $('#liveview').hidden = !lvv; document.querySelector('.dock').hidden = other;
+  clearInterval(liveTimer); if(lvv){ liveTimer = setInterval(() => { if(!document.hidden) loadLive(true); }, 60e3); }
+  if(sqv) renderSquad(); else if(pv) renderPens(); else if(lv) renderLineups(); else if(lvv){ renderLive(); loadLive(true); } else render();
 }
 window.FPL = {solveSquad, transferOptions, comboSearch, comboTop, workTeam, lineupScore, pickGW, state};
 
@@ -1487,6 +1549,7 @@ document.addEventListener('input', ev => {
   else if(t.id==='team'){ state.team=t.value; render(); }
   else if(t.id==='hz'){ state.hz=+t.value; render(); }
   else if(t.id==='rep-q'){ state.repq=t.value; const pos=t.selectionStart; renderSquad(); const n=$('#rep-q'); if(n){ n.focus(); n.setSelectionRange(pos,pos); } }
+  else if(t.id==='lv-team'){ state.liveTeam=t.value; renderLive(); }
   else if(t.id==='lu-gw'){ state.lug=+t.value; renderLineups(); }
   else if(t.id==='sq-team'){ state.mine=+t.value; const T=curTeam(); if(T&&T.ft!=null) state.ft=T.ft; state.squad=null; state.opt=null; state.moves=[]; state.srow=null; renderSquad(); }
   else if(t.id==='sq-hz'){ state.squad=null; state.opt=null; renderSquad(); }

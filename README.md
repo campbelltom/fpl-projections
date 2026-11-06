@@ -50,3 +50,7 @@ return-from-absence features, then competition for places and rest. A rating-gap
 (`scripts/fetch_prices.py`) and force-pushes one file, `prices.json`, to the orphan branch `prices`. The site fetches it from
 raw.githubusercontent.com on load, so prices stay fresh without a redeploy. It flags suggested signings about to rise, players you would sell
 (or own) about to fall, and players whose price has already moved since the last full update.
+
+## Live scores
+
+The **Live** tab shows the gameweek in play: scores, goals, assists and cards per match, the top scorers, and live points for each team in `config/teams.json` (provisional bonus from BPS until the official bonus lands, and automatic substitutions once a team's games are over). `.github/workflows/live.yml` runs every five minutes, fetches the official Fantasy feed and publishes `live.json` to the `live` branch during a match window only; the site reads it from there and re-reads it every minute while the tab is open. GitHub's scheduler can run a few minutes late, so expect it to trail the official site slightly.
