@@ -952,8 +952,7 @@ function penEvidence(t){
 }
 function renderPens(){
   const d = state.data, P = (d.penalties||[]).slice();
-  const order = {unclear:0,confirmed:1};
-  P.sort((a,b) => order[a.status]-order[b.status] || b.rate-a.rate);
+  P.sort((a,b) => a.team.localeCompare(b.team));
   const cards = P.map(t => {
     const [lab,cls] = PSTAT[t.status] || ['',''];
     const rows = t.takers.map(x => `<div class="tk"><span class="tn">${esc(x.name)}${x.mover?'<em>MOVED</em>':''}</span>
@@ -962,7 +961,7 @@ function renderPens(){
     const mv = t.takers.filter(x=>x.mover).map(x=>`${esc(x.name)} took ${x.prev} penalties for a previous club: unconfirmed here.`).join(' ');
     return `<div class="pc"><div class="ph2"><b>${esc(t.team)}</b><span class="ps ${cls}">${lab}</span><span class="pr">${t.rate.toFixed(2)} pens/match</span></div>${rows}<p>${penEvidence(t)} ${mv}</p></div>`;
   }).join('');
-  $('#pensview').innerHTML = `<p class="sqnote">Who takes each club's penalties, from the penalties each player has taken <b>for that club</b> (recent ones count most). FPL's own taker listing is not used. A transfer resets the evidence: a taker who has moved is shown as MOVED until he takes one for the new club. Flagged clubs are listed first. In a backtest on 90 real penalties this named the actual taker first 69% of the time, against 28% for the old shares of team xG.</p>${cards}`;
+  $('#pensview').innerHTML = `<p class="sqnote">Who takes each club's penalties, from the penalties each player has taken <b>for that club</b> (recent ones count most). FPL's own taker listing is not used. A transfer resets the evidence: a taker who has moved is shown as MOVED until he takes one for the new club. Clubs are listed alphabetically. In a backtest on 90 real penalties this named the actual taker first 69% of the time, against 28% for the old shares of team xG.</p>${cards}`;
 }
 const horizonLabel = hz => hz===1 ? 'the next gameweek' : hz+' gameweeks';
 const MEDNOTE = 'A red or amber plus marks a player who is injured, suspended or doubtful: his projection already allows for missed games, but injury news changes fast, so check before acting.';
