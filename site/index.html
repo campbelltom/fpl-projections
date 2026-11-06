@@ -1440,15 +1440,151 @@ function buildSquad(){
   }, 20);
 }
 
+
+/* LIVE-CALC-START  (a port of scripts/fetch_live.py: tests/test_live_port.py checks the two give identical output) */
+const LV_EV = [['goals_scored','g'],['assists','a'],['own_goals','og'],['penalties_saved','ps'],['penalties_missed','pm'],['yellow_cards','yc'],['red_cards','rc']];
+const LV_POS = {1:'GKP',2:'DEF',3:'MID',4:'FWD'};
+function lvStat(f){ const o = {}; (f.stats||[]).forEach(s => o[s.identifier] = s); return o; }
+function lvBonus(fixtures){
+  const out = new Map();
+  for(const f of fixtures){
+    if(!f.started) continue;
+    const st = lvStat(f), official = new Map();
+    for(const side of ['h','a']) for(const x of ((st.bonus||{})[side]||[])) official.set(x.element, x.value);
+    if(official.size){ out.set(f.id, official); continue; }
+    const bps = []; for(const side of ['h','a']) for(const x of ((st.bps||{})[side]||[])) bps.push([x.element, x.value]);
+    const res = new Map();
+    for(const [el,v] of bps){ const place = bps.filter(([,w]) => w>v).length, b = [3,2,1][place] || 0; if(b) res.set(el,b); }
+    out.set(f.id, res);
+  }
+  return out;
+}
+function lvPoints(live, fixtures){
+  const bonus = lvBonus(fixtures), res = new Map();
+  for(const e of live.elements||[]){
+    let pts = 0, bon = 0;
+    for(const ex of e.explain||[]){
+      const b = (bonus.get(ex.fixture)||new Map()).get(e.id) || 0;
+      pts += ex.stats.filter(s => s.identifier!=='bonus').reduce((a,s)=>a+s.points,0) + b; bon += b;
+    }
+    const st = e.stats||{};
+    res.set(e.id, [pts, Math.trunc(+st.minutes||0), Math.trunc(+st.bps||0), bon]);
+  }
+  return res;
+}
+function lvAutoSubs(xi, bench, played, done, pos){
+  xi = xi.slice(); bench = bench.slice(); const swaps = [];
+  for(const out of xi.filter(p => !played(p) && done(p))){
+    for(const b of bench){
+      if(!played(b)) continue;
+      if((pos[b]===1) !== (pos[out]===1)) continue;
+      const nw = xi.map(p => p===out ? b : p), n = k => nw.filter(p => pos[p]===k).length;
+      if(n(1)===1 && n(2)>=3 && n(3)>=2 && n(4)>=1){ xi = nw; swaps.push([out,b]); bench.splice(bench.indexOf(b),1); break; }
+    }
+  }
+  return [xi, swaps];
+}
+function lvTeam(label, id, picks, played, done, pts, pos){
+  const ps = picks.picks, chip = picks.active_chip || null;
+  let xi = ps.filter(p => p.position<=11).map(p => p.element);
+  let bench = ps.filter(p => p.position>11).sort((a,b)=>a.position-b.position).map(p => p.element);
+  const mult = {}; ps.forEach(p => mult[p.element] = p.multiplier);
+  let cap = (ps.find(p => p.is_captain)||{}).element ?? null; const vice = (ps.find(p => p.is_vice_captain)||{}).element ?? null;
+  let swaps = [];
+  if(chip!=='bboost'){
+    [xi, swaps] = lvAutoSubs(xi, bench, played, done, pos);
+    for(const [o,i] of swaps){ mult[i] = 1; mult[o] = 0; }
+    if(cap!==null && !played(cap) && done(cap) && vice!==null && played(vice) && xi.includes(vice)){ mult[vice] = mult[cap]; mult[cap] = 1; cap = vice; }
+  } else { xi = xi.concat(bench); bench = []; xi.forEach(p => mult[p] = Math.max(mult[p]||1, 1)); }
+  const rest = bench.filter(b => !xi.includes(b)), cost = (picks.entry_history||{}).event_transfers_cost || 0;
+  const g = e => pts.has(e) ? pts.get(e) : [0,0,0,0];
+  const rows = ids => ids.map(e => [e, mult[e]||0, g(e)[0], pts.has(e) ? pts.get(e)[1] : 0]);
+  const total = xi.reduce((a,e)=>a+(mult[e]||0)*g(e)[0], 0) - cost;
+  return {label, id, chip, cost, pts:total, cap, xi:rows(xi), bench:rows(rest), subs:swaps};
+}
+function lvLeague(meta, standings, picks, played, done, pts, pos){
+  const rows = standings.map(s => {
+    const pk = picks.get(s.entry), row = {e:s.entry, n:s.entry_name, m:s.player_name, pre:s.total-s.event_total, gw:null};
+    if(pk){ const tm = lvTeam('', s.entry, pk, played, done, pts, pos); row.gw = tm.pts; row.chip = tm.chip; row.left = tm.xi.filter(r => r[1] && !done(r[0])).length; }
+    else row.gw = s.event_total;
+    return row;
+  });
+  return {id:meta.id, name:meta.name, rows};
+}
+function lvBuild(boot, fixtures, live, picksByTeam, nowIso, leagues){
+  const teams = {}; boot.teams.forEach(t => teams[t.id] = t.short_name);
+  const el = {}; boot.elements.forEach(e => el[e.id] = e);
+  const pos = {}; boot.elements.forEach(e => pos[e.id] = e.element_type);
+  const pts = lvPoints(live, fixtures), teamFx = {};
+  fixtures.forEach(f => [f.team_h, f.team_a].forEach(t => (teamFx[t] = teamFx[t]||[]).push(f)));
+  const played = e => (pts.has(e) ? pts.get(e)[1] : 0) > 0;
+  const done = e => { const l = teamFx[el[e].team]; return l && l.length ? l.every(f => f.finished_provisional || f.finished) : false; };
+  const fx = [], need = new Set();
+  fixtures.slice().sort((a,b) => (a.kickoff_time||'') < (b.kickoff_time||'') ? -1 : (a.kickoff_time||'') > (b.kickoff_time||'') ? 1 : 0).forEach(f => {
+    const ev = [], st = lvStat(f);
+    for(const [ident,k] of LV_EV) for(const side of ['h','a']) for(const x of ((st[ident]||{})[side]||[])){ ev.push([k, x.element, side, x.value]); need.add(x.element); }
+    fx.push({id:f.id, ko:f.kickoff_time||null, h:teams[f.team_h], a:teams[f.team_a], hs:f.team_h_score ?? null, as:f.team_a_score ?? null,
+             fin:!!(f.finished_provisional||f.finished), st:!!f.started, m:f.minutes||0, ev});
+  });
+  const tms = [];
+  for(const [label,id,picks] of picksByTeam){ const t = lvTeam(label, id, picks, played, done, pts, pos); tms.push(t); t.xi.concat(t.bench).forEach(r => need.add(r[0])); }
+  const lg = (leagues||[]).map(([m,st,pk]) => lvLeague(m, st, pk, played, done, pts, pos));
+  const top = [...pts.keys()].sort((a,b) => pts.get(b)[0]-pts.get(a)[0]).slice(0,15);
+  top.forEach(e => need.add(e));
+  const pl = {};
+  need.forEach(e => { if(el[e]) pl[String(e)] = [el[e].web_name, teams[el[e].team], LV_POS[pos[e]], pts.has(e)?pts.get(e)[0]:0, pts.has(e)?pts.get(e)[1]:0, pts.has(e)?pts.get(e)[3]:0]; });
+  return {at:nowIso, fx, pl, teams:tms, top, lg};
+}
+/* LIVE-CALC-END */
 /* ---------- live scores: scores, events and the tracked teams' points, published every five minutes during matches (live branch) ---------- */
 const LIVE_URL = 'https://raw.githubusercontent.com/campbelltom/fpl-projections/live/live.json';
 let liveTimer = null;
+/* With the Cloudflare Worker set, the page reads the official API through it (a cached copy, a few seconds old) and works the scores out
+   itself; if that fails, or no Worker is set, it falls back to the file the GitHub job publishes every five minutes. */
+const FPL_PROXY = '';   // e.g. 'https://campbell-fpl-proxy.<account>.workers.dev'
+const lvMem = {boot:null, bootAt:0, picks:new Map(), ents:new Map(), lgs:null, lgsAt:0};
+const lvApi = path => fetch(FPL_PROXY+'/fpl/'+path).then(r => { if(!r.ok) throw new Error('FPL '+r.status); return r.json(); });
+async function lvPool(items, n, fn){ const out = []; let i = 0; await Promise.all(Array.from({length:Math.min(n,items.length)}, async () => { while(i<items.length){ const k = i++; out[k] = await fn(items[k]); } })); return out; }
+async function lvPicks(gw, id){
+  const k = gw+':'+id, hit = lvMem.picks.get(k);
+  if(hit && Date.now()-hit.at < 120e3) return hit.v;
+  try { const v = await lvApi(`entry/${id}/event/${gw}/picks/`); lvMem.picks.set(k, {at:Date.now(), v}); return v; } catch(e){ return hit ? hit.v : null; }
+}
+async function liveFromApi(){
+  if(!lvMem.boot || Date.now()-lvMem.bootAt > 600e3){ lvMem.boot = await lvApi('bootstrap-static/'); lvMem.bootAt = Date.now(); }
+  const boot = lvMem.boot, ev = boot.events, cur = ev.find(e => e.is_current) || ev.find(e => !e.finished) || ev[0];
+  let gw = cur.id, fixtures = await lvApi('fixtures/?event='+gw);
+  const nxt = ev.find(e => e.id===gw+1);
+  if(nxt && fixtures.every(f => f.finished_provisional || f.finished)){
+    const nf = await lvApi('fixtures/?event='+nxt.id);
+    if(nf.some(f => f.started)){ gw = nxt.id; fixtures = nf; }
+  }
+  const live = await lvApi(`event/${gw}/live/`);
+  const mine = (state.data.teams||[]).filter(t => t.id);
+  const tracked = (await lvPool(mine, 4, async t => [t.label, t.id, await lvPicks(gw, t.id)])).filter(x => x[2]);
+  let leagues = [];
+  try {
+    if(!lvMem.lgs || Date.now()-lvMem.lgsAt > 120e3){
+      if(!lvMem.ids){ const ent = await lvApi(`entry/${mine[0].id}/`); lvMem.ids = ((ent.leagues||{}).classic||[]).filter(c => c.league_type==='x').slice(0,3).map(c => c.id); }
+      lvMem.lgs = await lvPool(lvMem.ids, 3, id => lvApi(`leagues-classic/${id}/standings/`)); lvMem.lgsAt = Date.now();
+    }
+    for(const st of lvMem.lgs){
+      const rows = st.standings.results.slice(0,60);
+      const got = await lvPool(rows, 6, r => lvPicks(gw, r.entry));
+      const pk = new Map(); rows.forEach((r,i) => { if(got[i]) pk.set(r.entry, got[i]); });
+      leagues.push([{id:st.league.id, name:st.league.name}, rows, pk]);
+    }
+  } catch(e){ /* the tracked teams still show without the leagues */ }
+  const res = lvBuild(boot, fixtures, live, tracked, new Date().toISOString(), leagues); res.gw = gw; return res;
+}
 function loadLive(force){
-  if(!force && state.liveAt && Date.now()-state.liveAt < 45e3) return Promise.resolve();
-  state.liveAt = Date.now();
-  return fetch(LIVE_URL+'?t='+Math.floor(Date.now()/60e3), {cache:'no-store'}).then(r => r.ok ? r.json() : null).then(j => {
-    state.live = j || state.live || null; state.liveTried = true; if(state.view==='live') renderLive();
-  }).catch(() => { state.liveTried = true; if(state.view==='live') renderLive(); });
+  if(!force && state.liveAt && Date.now()-state.liveAt < 20e3) return Promise.resolve();
+  if(state.liveBusy) return Promise.resolve();
+  state.liveAt = Date.now(); state.liveBusy = true;
+  const fromFile = () => fetch(LIVE_URL+'?t='+Math.floor(Date.now()/60e3), {cache:'no-store'}).then(r => r.ok ? r.json() : null);
+  let src = 'file';
+  const first = FPL_PROXY ? liveFromApi().then(j => { src = 'api'; return j; }).catch(() => { src = 'file'; return fromFile(); }) : fromFile();
+  return first.then(j => { state.live = j || state.live || null; state.liveSrc = src; }).catch(() => {}).then(() => { state.liveBusy = false; state.liveTried = true; if(state.view==='live') renderLive(); });
 }
 const lvTime = iso => { try { return new Date(iso).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}); } catch(e){ return ''; } };
 function lvEvents(L, f){
@@ -1493,14 +1629,14 @@ function renderLive(){
   }).join('');
   const top = (L.top||[]).slice(0,10).map(id => { const p = nm(id); return `<div class="lv-p"><span>${esc(p[0])}<small> ${esc(p[1])} ${esc(p[2])}</small></span><small>${p[4]}'</small><b>${p[3]}</b></div>`; }).join('');
   el.innerHTML = `<div class="lv-h"><b>GW${L.gw}</b><span>${anyOn ? 'matches under way' : 'no match on right now'} &middot; updated ${lvTime(L.at)}${ageMin>12 && anyOn ? ' (running late)' : ''}</span></div>${team}${league}${fx}<div class="lv-t"><div class="lv-bn" style="margin:0 0 4px">Top scorers this gameweek</div>${top}</div>
-   <p class="sqnote">Mini-league tables are ranked on points before this gameweek plus live points (up to the first 60 managers of up to three private leagues; yours are found automatically, or list league ids in config/leagues.json). Points use provisional bonus from BPS until the official bonus is in. The picture refreshes about every five minutes; it can run a little behind the official site.</p>`;
+   <p class="sqnote">Mini-league tables are ranked on points before this gameweek plus live points (up to the first 60 managers of up to three private leagues; yours are found automatically, or list league ids in config/leagues.json). Points use provisional bonus from BPS until the official bonus is in. ${state.liveSrc==='api' ? 'Read through the Cloudflare proxy: refreshes every 30 seconds, a minute or so behind the official site at most.' : 'The picture refreshes about every five minutes; it can run a little behind the official site.'}</p>`;
 }
 function setView(v){
   state.view = v;
   document.querySelectorAll('#views button').forEach(x=>x.setAttribute('aria-pressed',x.dataset.v===v));
   const sqv = v==='squad', pv = v==='pens', lv = v==='lineups', lvv = v==='live', other = sqv||pv||lv||lvv;
   $('#pctl').hidden = other; $('#list').hidden = other; $('#squadview').hidden = !sqv; $('#pensview').hidden = !pv; $('#lineupview').hidden = !lv; $('#liveview').hidden = !lvv; document.querySelector('.dock').hidden = other;
-  clearInterval(liveTimer); if(lvv){ liveTimer = setInterval(() => { if(!document.hidden) loadLive(true); }, 60e3); }
+  clearInterval(liveTimer); if(lvv){ liveTimer = setInterval(() => { if(!document.hidden) loadLive(true); }, FPL_PROXY ? 30e3 : 60e3); }
   if(sqv) renderSquad(); else if(pv) renderPens(); else if(lv) renderLineups(); else if(lvv){ renderLive(); loadLive(true); } else render();
 }
 window.FPL = {solveSquad, transferOptions, comboSearch, comboTop, workTeam, lineupScore, pickGW, state};

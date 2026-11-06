@@ -54,3 +54,10 @@ raw.githubusercontent.com on load, so prices stay fresh without a redeploy. It f
 ## Live scores
 
 The **Live** tab shows the gameweek in play: scores, goals, assists and cards per match, the top scorers, and live points for each team in `config/teams.json` (provisional bonus from BPS until the official bonus lands, and automatic substitutions once a team's games are over). `.github/workflows/live.yml` runs every five minutes, fetches the official Fantasy feed and publishes `live.json` to the `live` branch during a match window only; the site reads it from there and re-reads it every minute while the tab is open. GitHub's scheduler can run a few minutes late, so expect it to trail the official site slightly.
+
+### Faster live scores (Cloudflare Worker)
+
+`worker/` is a small Cloudflare Worker that sits between the page and the official FPL API. Browsers cannot read that API directly (no CORS permission header), so the page asks the Worker; the Worker asks FPL, keeps each answer at Cloudflare's edge for 20 to 600 seconds depending on the endpoint, and returns it with the permission header added. It allows only GET, only six read-only paths, and only requests from the site's own address. The page then works out live points, bonus, auto-subs and league ranks itself (the JavaScript in `site/index.html` between the `LIVE-CALC` markers is a port of `scripts/fetch_live.py`; `tests/test_live_port.py` checks they agree) and refreshes every 30 seconds. If the Worker is not set or is down, it falls back to the five-minute GitHub file.
+
+To switch it on: add repository secrets `CLOUDFLARE_API_TOKEN` (the "Edit Cloudflare Workers" token template) and `CLOUDFLARE_ACCOUNT_ID`, run **Deploy proxy Worker**, then put the Worker's address in `FPL_PROXY` in `site/index.html`.
+
