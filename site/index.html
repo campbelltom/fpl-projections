@@ -1541,7 +1541,7 @@ const LIVE_URL = 'https://raw.githubusercontent.com/campbelltom/fpl-projections/
 let liveTimer = null;
 /* With the Cloudflare Worker set, the page reads the official API through it (a cached copy, a few seconds old) and works the scores out
    itself; if that fails, or no Worker is set, it falls back to the file the GitHub job publishes every five minutes. */
-const FPL_PROXY = '';   // e.g. 'https://campbell-fpl-proxy.<account>.workers.dev'
+const FPL_PROXY = 'https://campbell-fpl-proxy.campbelltom321.workers.dev';
 const lvMem = {boot:null, bootAt:0, picks:new Map(), ents:new Map(), lgs:null, lgsAt:0};
 const lvApi = path => fetch(FPL_PROXY+'/fpl/'+path).then(r => { if(!r.ok) throw new Error('FPL '+r.status); return r.json(); });
 async function lvPool(items, n, fn){ const out = []; let i = 0; await Promise.all(Array.from({length:Math.min(n,items.length)}, async () => { while(i<items.length){ const k = i++; out[k] = await fn(items[k]); } })); return out; }
