@@ -1623,8 +1623,9 @@ function renderLive(){
   rivals.forEach(r => r.t.xi.forEach(x => { if(x[1]>0){ if(!owners.has(x[0])) owners.set(x[0], []); owners.get(x[0]).push(r); } }));
   const pct = id => rivals.length ? Math.round(100*(owners.get(id)||[]).length/rivals.length) : 0;
   const bar = n => `<span class="pb"><i style="width:${n}%"></i></span>`;
-  const eo = (r, bench, X) => { if(bench || X!==T || !rivals.length || !when(r[0])) return ''; const n = pct(r[0]);
-    return `<span class="eo${n===0?' diff':''}" title="${n===0 ? 'None of the '+rivals.length+' others in this league have him: a differential' : n+'% of the '+rivals.length+' others in this league have him in their team'}">${bar(n)}${n}%</span>`; };
+  // impact = how much of the league he separates you from: for your own player, the share of rivals who do NOT have him; for a rival's player, the share who do
+  const eo = (r, bench, X) => { if(bench || X!==T || !rivals.length || !when(r[0])) return ''; const n = 100 - pct(r[0]);
+    return `<span class="eo${n===100?' diff':''}" title="${n===100 ? 'Nobody else in this league has him: full impact' : n+'% of the '+rivals.length+' others in this league do not have him, so his points gain you ground on them'}">${bar(n)}${n}%</span>`; };
   const prow = (r, bench, X) => { const p = nm(r[0]), played = r[3]>0, tag = r[0]===X.cap ? '<span class="cap">C</span>' : '';
     const sub = X.subs.some(s=>s[1]===r[0]) ? '<span class="sub">auto-sub in</span>' : X.subs.some(s=>s[0]===r[0]) ? '<span class="out">auto-sub out</span>' : '';
     return `<div class="lv-p${played||!bench&&r[1]?'':' off'}"><span>${esc(p[0])}${tag}${sub}<small> ${esc(p[1])} ${esc(p[2])}</small>${eo(r, bench, X)}</span><small>${played?r[3]+"'":(when(r[0])||'-')}</small><b>${r[1]>1?r[2]*r[1]:r[2]}</b></div>`; };
@@ -1648,9 +1649,9 @@ function renderLive(){
     .sort((a,b) => Math.abs(b.sw)-Math.abs(a.sw)).slice(0,10) : [];
   const swMax = Math.max(1, ...swings.map(x => Math.abs(x.sw)));
   const swing = swings.length ? `<div class="lv-t"><div class="lv-bn" style="margin:0 0 4px">Still to come: what moves you against the league</div>${swings.map(x => { const p = nm(x.id), n = pct(x.id), w = Math.round(50*Math.abs(x.sw)/swMax);
-    return `<div class="lv-sw"><span>${esc(p[0])}<small> ${esc(p[1])} ${esc(p[2])} &middot; ${when(x.id)}</small></span><span class="eo${x.mine&&n===0?' diff':''}" title="${n}% of the others in this league have him">${bar(n)}${n}%</span>
+    return `<div class="lv-sw"><span>${esc(p[0])}<small> ${esc(p[1])} ${esc(p[2])} &middot; ${when(x.id)}</small></span><span class="eo${x.mine&&n===0?' diff':''}" title="${x.mine ? (100-n)+'% of the others in this league do not have him' : n+'% of the others in this league have him and you do not'}">${bar(x.mine?100-n:n)}${x.mine?100-n:n}%</span>
       <span class="sb"><i class="${x.sw>0?'g':'r'}" style="${x.sw>0?'left:50%':'right:50%'};width:${w}%"></i></span><b class="${x.sw>0?'gn':'rd'}">${x.sw>0?'+':'&minus;'}${Math.abs(x.sw).toFixed(1)}</b></div>`; }).join('')}
-    <div class="lv-hint">Gain or loss against the average rival if he returns ${RET} points, from who has him and how many times (captains count double). Bar to the right is good for you.</div></div>` : '';
+    <div class="lv-hint">The percentage is his impact: the share of your rivals he separates you from (they do not have him if he is yours; they do if he is theirs). The bar is the gain or loss against the average rival if he returns ${RET} points (captains count double); right is good for you.</div></div>` : '';
   const fx = L.fx.map(f => {
     const st = f.fin ? 'Full time' : f.st ? ('Live' + (f.m ? ' ' + f.m + "'" : '')) : kick(f.ko);
     const sc = f.st ? `${f.hs ?? 0} - ${f.as ?? 0}` : 'v';
