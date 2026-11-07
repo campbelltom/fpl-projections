@@ -1623,10 +1623,13 @@ function renderLive(){
   const owners = new Map();
   rivals.forEach(r => r.t.xi.forEach(x => { if(x[1]>0){ if(!owners.has(x[0])) owners.set(x[0], []); owners.get(x[0]).push(r); } }));
   const pct = id => rivals.length ? Math.round(100*(owners.get(id)||[]).length/rivals.length) : 0;
-  const bar = n => `<span class="pb"><i style="width:${n}%"></i></span>`;
-  // impact = how much of the league he separates you from: for your own player, the share of rivals who do NOT have him; for a rival's player, the share who do
-  const eo = (r, bench, X) => { if(bench || X!==T || !rivals.length) return ''; const n = 100 - pct(r[0]);
-    return `<span class="eo${n===100?' diff':''}" title="${n===100 ? 'Nobody else in this league has him: full impact' : n+'% of the '+rivals.length+' others in this league do not have him, so his points gain you ground on them'}">${bar(n)}<span class="pt">${n}%</span></span>`; };
+  // signed impact, -100..+100: green when he separates you from the league in your favour, red when it is the other way, white at 0
+  const mixc = (v, a) => { const tt = Math.pow(Math.min(1, Math.abs(v)/100), .6), base = v>=0 ? [42,157,87] : [192,57,43], c = base.map(b => Math.round(235 + (b-235)*tt));
+    return a===undefined ? `rgb(${c})` : `rgba(${base},${a*tt})`; };
+  const txtc = v => { const tt = Math.pow(Math.min(1, Math.abs(v)/100), .6), base = v>=0 ? [24,115,63] : [165,42,32], g = [110,115,125]; return `rgb(${g.map((x,i) => Math.round(x + (base[i]-x)*tt))})`; };
+  const chip = (v, tip) => `<span class="eo" style="background:${v===0 ? 'var(--card2)' : mixc(v, .22)};color:${txtc(v)}" title="${tip}"><span class="pb"><i style="width:${Math.abs(v)}%;background:${mixc(v)}"></i></span><span class="pt">${v>0?'+':v<0?'&minus;':''}${Math.abs(v)}%</span></span>`;
+  const eo = (r, bench, X) => { if(bench || X!==T || !rivals.length) return ''; const v = 100 - pct(r[0]);
+    return chip(v, v===100 ? 'Nobody else in this league has him: full impact' : v+'% of the '+rivals.length+' others in this league do not have him, so his points gain you ground on them'); };
   const prow = (r, bench, X) => { const p = nm(r[0]), played = r[3]>0, tag = r[0]===X.cap ? '<span class="cap">C</span>' : '';
     const sub = X.subs.some(s=>s[1]===r[0]) ? '<span class="sub">auto-sub in</span>' : X.subs.some(s=>s[0]===r[0]) ? '<span class="out">auto-sub out</span>' : '';
     return `<div class="lv-p lv-p4${played||!bench&&r[1]?'':' off'}"><span>${esc(p[0])}${tag}${sub}<small> ${esc(p[1])} ${esc(p[2])}</small></span>${eo(r, bench, X) || '<span></span>'}<small>${played?r[3]+"'":(when(r[0])||'-')}</small><b>${r[1]>1?r[2]*r[1]:r[2]}</b></div>`; };
@@ -1650,9 +1653,9 @@ function renderLive(){
     .sort((a,b) => Math.abs(b.sw)-Math.abs(a.sw)).slice(0,10) : [];
   const swMax = Math.max(1, ...swings.map(x => Math.abs(x.sw)));
   const swing = swings.length ? `<div class="lv-t"><div class="lv-bn" style="margin:0 0 4px">Still to come: what moves you against the league</div>${swings.map(x => { const p = nm(x.id), n = pct(x.id), w = Math.round(50*Math.abs(x.sw)/swMax);
-    return `<div class="lv-sw"><span>${esc(p[0])}<small> ${esc(p[1])} ${esc(p[2])} &middot; ${when(x.id)}</small></span><span class="eo${x.mine&&n===0?' diff':''}" title="${x.mine ? (100-n)+'% of the others in this league do not have him' : n+'% of the others in this league have him and you do not'}">${bar(x.mine?100-n:n)}<span class="pt">${x.mine?100-n:n}%</span></span>
+    return `<div class="lv-sw"><span>${esc(p[0])}<small> ${esc(p[1])} ${esc(p[2])} &middot; ${when(x.id)}</small></span>${chip(x.mine ? 100-n : -n, x.mine ? (100-n)+'% of the others in this league do not have him' : n+'% of the others in this league have him and you do not')}
       <span class="sb"><i class="${x.sw>0?'g':'r'}" style="${x.sw>0?'left:50%':'right:50%'};width:${w}%"></i></span><b class="${x.sw>0?'gn':'rd'}">${x.sw>0?'+':'&minus;'}${Math.abs(x.sw).toFixed(1)}</b></div>`; }).join('')}
-    <div class="lv-hint">The percentage is his impact: the share of your rivals he separates you from (they do not have him if he is yours; they do if he is theirs). The bar is the gain or loss against the average rival if he returns ${RET} points (captains count double); right is good for you.</div></div>` : '';
+    <div class="lv-hint">Impact runs from +100% (nobody else in your league has him) through 0% (everyone does) to −100% (a player every rival has and you do not). The bar is the gain or loss against the average rival if he returns ${RET} points (captains count double); right is good for you.</div></div>` : '';
   const fx = L.fx.map(f => {
     const st = f.fin ? 'Full time' : f.st ? ('Live' + (f.m ? ' ' + f.m + "'" : '')) : kick(f.ko);
     const sc = f.st ? `${f.hs ?? 0} - ${f.as ?? 0}` : 'v';
@@ -1661,7 +1664,7 @@ function renderLive(){
   }).join('');
   const myBench = new Set(T ? T.bench.map(r=>r[0]) : []);
   const top = (L.top||[]).filter((id,i) => i<10 || myMult.has(id)).map(id => { const p = nm(id), m = myMult.get(id), bn = myBench.has(id);
-    const tag = m ? `<span class="mine-t">${m>1 ? 'yours &times;'+m : 'yours'}</span>` : bn ? '<span class="mine-t bn">your bench</span>' : '';
+    const tag = m > 1 ? `<span class="mine-t">&times;${m}</span>` : bn ? '<span class="mine-t bn">bench</span>' : '';
     return `<div class="lv-p${m ? ' mine' : ''}"><span>${esc(p[0])}${tag}<small> ${esc(p[1])} ${esc(p[2])}</small></span><small>${p[4]}'</small><b>${p[3]}</b></div>`; }).join('');
   el.innerHTML = `<div class="lv-h"><b>GW${L.gw}</b><span>${anyOn ? 'matches under way' : 'no match on right now'} &middot; updated ${lvTime(L.at)}${ageMin>12 && anyOn ? ' (running late)' : ''}</span></div>${team}${league}${swing}${fx}<div class="lv-t"><div class="lv-bn" style="margin:0 0 4px">Top scorers this gameweek</div>${top}</div>
    <p class="sqnote">Mini-league tables are ranked on points before this gameweek plus live points (up to the first 60 managers of up to three private leagues; yours are found automatically, or list league ids in config/leagues.json). Points use provisional bonus from BPS until the official bonus is in. ${state.liveSrc==='api' ? 'Read through the Cloudflare proxy: refreshes every 30 seconds, a minute or so behind the official site at most.' : 'The picture refreshes about every five minutes; it can run a little behind the official site.'}</p>`;
