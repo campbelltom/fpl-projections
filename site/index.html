@@ -315,6 +315,7 @@ button.fhb{font:600 .72rem var(--num);padding:5px 9px;border-radius:8px;border:0
 .lv-lg{width:100%;border-collapse:collapse;font-size:.86rem}.lv-lg td{padding:5px 3px;border-top:1px solid var(--line)}.lv-lg td:first-child{width:1.6rem;font:700 .85rem var(--num)}
 .lv-lg td.n small{display:block;color:var(--ink2);font-size:.68rem}.lv-lg td.r{text-align:right;font:600 .9rem var(--num)}.lv-lg td.r small{display:block;color:var(--ink2);font:400 .66rem var(--body)}
 .lv-lg tr.me td{background:var(--card2)}.mv{font-size:.65rem;margin-left:3px}.mv.u{color:#2a9d57}.mv.d{color:#c0392b}
+.eo{font:600 .62rem var(--num);padding:1px 5px;border-radius:8px;margin-left:5px;background:var(--card2);color:var(--ink2)}.eo.diff{background:#2a9d57;color:#fff}
 .lv-hint{margin-top:6px;font-size:.68rem;color:var(--ink2);text-align:center}.lv-x td{padding:0 0 6px 1.6rem !important;border-top:0 !important}.lv-sq{background:var(--card2);border-radius:10px;padding:2px 10px 6px}.lv-sq .lv-p:first-child{border-top:0}
 .lv-ev{font-size:.74rem;color:var(--ink2);margin-top:5px;line-height:1.5}.lv-ev b{color:var(--ink);font-weight:600}
 .pc{background:var(--card);border-radius:14px;padding:9px 12px 8px;margin-bottom:6px}
@@ -1607,16 +1608,24 @@ function renderLive(){
   }
   const T = L.teams.find(t=>t.label===state.liveTeam);
   const nm = id => L.pl[id] ? L.pl[id] : ['?','','',0,0,0];
+  const lgs = L.lg || []; if(lgs.length && !lgs.some(x=>x.id===state.liveLg)) state.liveLg = (lgs.find(x=>LV_DEFAULT_LEAGUE.test(x.name)) || lgs[0]).id;
+  const G = lgs.find(x=>x.id===state.liveLg), mineIds = new Set(L.teams.map(x=>x.id));
+  const fxNext = {}; L.fx.forEach(f => { if(f.fin) return; [f.h,f.a].forEach(tm => { if(!fxNext[tm] || (f.ko||'') < (fxNext[tm].ko||'')) fxNext[tm] = f; }); });
+  const kick = iso => { try { return new Date(iso).toLocaleString('en-GB',{weekday:'short',hour:'2-digit',minute:'2-digit',timeZone:'Europe/London'}).replace(',',''); } catch(e){ return ''; } };
+  const when = id => { const f = fxNext[nm(id)[1]]; return !f ? '' : f.st ? 'live' : kick(f.ko); };
+  const rivals = G && T ? G.rows.filter(r => r.t && r.e!==T.id) : [];
+  const owners = new Map();
+  rivals.forEach(r => r.t.xi.forEach(x => { if(x[1]>0){ if(!owners.has(x[0])) owners.set(x[0], []); owners.get(x[0]).push(r); } }));
+  const eo = (r, bench, X) => { if(bench || X!==T || !rivals.length || !when(r[0])) return ''; const n = (owners.get(r[0])||[]).length;
+    return n===0 ? `<span class="eo diff" title="None of the ${rivals.length} others in this league have him in their team: a differential">only you</span>` : `<span class="eo" title="${n} of ${rivals.length} others in this league have him in their team">${n}/${rivals.length}</span>`; };
   const prow = (r, bench, X) => { const p = nm(r[0]), played = r[3]>0, tag = r[0]===X.cap ? '<span class="cap">C</span>' : '';
     const sub = X.subs.some(s=>s[1]===r[0]) ? '<span class="sub">auto-sub in</span>' : X.subs.some(s=>s[0]===r[0]) ? '<span class="out">auto-sub out</span>' : '';
-    return `<div class="lv-p${played||!bench&&r[1]?'':' off'}"><span>${esc(p[0])}${tag}${sub}<small> ${esc(p[1])} ${esc(p[2])}</small></span><small>${played?r[3]+"'":'-'}</small><b>${r[1]>1?r[2]*r[1]:r[2]}</b></div>`; };
+    return `<div class="lv-p${played||!bench&&r[1]?'':' off'}"><span>${esc(p[0])}${tag}${sub}<small> ${esc(p[1])} ${esc(p[2])}</small>${eo(r, bench, X)}</span><small>${played?r[3]+"'":(when(r[0])||'-')}</small><b>${r[1]>1?r[2]*r[1]:r[2]}</b></div>`; };
   const squad = X => X.xi.map(r=>prow(r,false,X)).join('') + (X.bench.length ? '<div class="lv-bn">Bench</div>'+X.bench.map(r=>prow(r,true,X)).join('') : '');
   const team = T ? `<div class="lv-t"><select id="lv-team" aria-label="Team">${L.teams.map(t=>`<option${t.label===T.label?' selected':''}>${esc(t.label)}</option>`).join('')}</select>
     <div class="big">${T.pts}<small style="font-size:.8rem;font-weight:500"> pts</small></div>
     <div class="meta">${T.chip ? ({bboost:'Bench boost',freehit:'Free hit','3xc':'Triple captain',wildcard:'Wildcard'}[T.chip]||T.chip)+' active &middot; ' : ''}${T.cost ? '-'+T.cost+' for transfers &middot; ' : ''}live, with provisional bonus${T.subs.length ? ' and automatic substitutions' : ''}</div>
     ${squad(T)}</div>` : '';
-  const lgs = L.lg || []; if(lgs.length && !lgs.some(x=>x.id===state.liveLg)) state.liveLg = (lgs.find(x=>LV_DEFAULT_LEAGUE.test(x.name)) || lgs[0]).id;
-  const G = lgs.find(x=>x.id===state.liveLg), mineIds = new Set(L.teams.map(x=>x.id));
   const league = G ? (() => {
     const pre = G.rows.slice().sort((a,b)=>b.pre-a.pre), preRank = new Map(pre.map((r,i)=>[r.e,i+1]));
     const now = G.rows.map(r=>({...r, tot:r.pre+(r.gw||0)})).sort((a,b)=>b.tot-a.tot);
@@ -1624,14 +1633,20 @@ function renderLive(){
       <table class="lv-lg">${now.map((r,i)=>{ const d = preRank.get(r.e)-(i+1);
         return `<tr data-lk="${r.e}"${mineIds.has(r.e)?' class="me"':''}${r.t?' style="cursor:pointer"':''}><td>${i+1}<span class="mv ${d>0?'u':d<0?'d':''}">${d>0?'&#9650;'+d:d<0?'&#9660;'+(-d):''}</span></td><td class="n">${esc(r.n)}<small>${esc(r.m)}${r.chip?' &middot; '+esc(({bboost:'Bench boost',freehit:'Free hit','3xc':'Triple captain',wildcard:'Wildcard'}[r.chip]||r.chip)):''}${r.left?' &middot; '+r.left+' to play':''}</small></td><td class="r">${r.gw ?? '-'}<small>GW</small></td><td class="r">${r.tot}<small>total</small></td></tr>${r.t && state.liveOpen===r.e ? `<tr class="lv-x"><td colspan="4"><div class="lv-sq">${squad(r.t)}</div></td></tr>` : ''}`; }).join('')}</table>${now.some(r=>r.t) ? '<div class="lv-hint">Tap a manager to see their team</div>' : ''}</div>`;
   })() : '';
+  const mineXi = new Set(T ? T.xi.filter(r=>r[1]>0).map(r=>r[0]) : []);
+  const threats = [...owners].filter(([id]) => !mineXi.has(id) && when(id)).map(([id,rs]) => ({id, rs, w:when(id)}))
+    .sort((a,b) => b.rs.length-a.rs.length || nm(b.id)[3]-nm(a.id)[3]).slice(0,8);
+  const threat = threats.length ? `<div class="lv-t"><div class="lv-bn" style="margin:0 0 4px">Still to play for your rivals, not in your team</div>${threats.map(x => { const p = nm(x.id);
+    return `<div class="lv-p"><span>${esc(p[0])}<small> ${esc(p[1])} ${esc(p[2])} &middot; ${x.rs.slice(0,3).map(r=>esc(r.n)).join(', ')}${x.rs.length>3?' +'+(x.rs.length-3):''}</small></span><small>${x.w}</small><b>${x.rs.length}</b></div>`; }).join('')}
+    <div class="lv-hint">Number of rivals who have him, and when he plays</div></div>` : '';
   const fx = L.fx.map(f => {
-    const st = f.fin ? 'Full time' : f.st ? ('Live' + (f.m ? ' ' + f.m + "'" : '')) : lvTime(f.ko);
+    const st = f.fin ? 'Full time' : f.st ? ('Live' + (f.m ? ' ' + f.m + "'" : '')) : kick(f.ko);
     const sc = f.st ? `${f.hs ?? 0} - ${f.as ?? 0}` : 'v';
     const ev = f.st ? lvEvents(L, f) : '';
     return `<div class="lv-f"><div class="lv-sc"><span>${esc(f.h)}</span><em>${sc}</em><span>${esc(f.a)}</span></div><div class="lv-st${f.st&&!f.fin?' on':''}">${st}</div>${ev?`<div class="lv-ev">${ev}</div>`:''}</div>`;
   }).join('');
   const top = (L.top||[]).slice(0,10).map(id => { const p = nm(id); return `<div class="lv-p"><span>${esc(p[0])}<small> ${esc(p[1])} ${esc(p[2])}</small></span><small>${p[4]}'</small><b>${p[3]}</b></div>`; }).join('');
-  el.innerHTML = `<div class="lv-h"><b>GW${L.gw}</b><span>${anyOn ? 'matches under way' : 'no match on right now'} &middot; updated ${lvTime(L.at)}${ageMin>12 && anyOn ? ' (running late)' : ''}</span></div>${team}${league}${fx}<div class="lv-t"><div class="lv-bn" style="margin:0 0 4px">Top scorers this gameweek</div>${top}</div>
+  el.innerHTML = `<div class="lv-h"><b>GW${L.gw}</b><span>${anyOn ? 'matches under way' : 'no match on right now'} &middot; updated ${lvTime(L.at)}${ageMin>12 && anyOn ? ' (running late)' : ''}</span></div>${team}${league}${threat}${fx}<div class="lv-t"><div class="lv-bn" style="margin:0 0 4px">Top scorers this gameweek</div>${top}</div>
    <p class="sqnote">Mini-league tables are ranked on points before this gameweek plus live points (up to the first 60 managers of up to three private leagues; yours are found automatically, or list league ids in config/leagues.json). Points use provisional bonus from BPS until the official bonus is in. ${state.liveSrc==='api' ? 'Read through the Cloudflare proxy: refreshes every 30 seconds, a minute or so behind the official site at most.' : 'The picture refreshes about every five minutes; it can run a little behind the official site.'}</p>`;
 }
 function setView(v){
