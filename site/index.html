@@ -318,7 +318,7 @@ button.fhb{font:600 .72rem var(--num);padding:5px 9px;border-radius:8px;border:0
 .eo{display:inline-flex;align-items:center;gap:4px;font:600 .62rem var(--num);padding:1px 6px 1px 4px;border-radius:8px;margin-left:5px;background:var(--card2);color:var(--ink2);vertical-align:1px}
 .eo.diff{color:#2a9d57}.pt{display:inline-block;min-width:2.3em;text-align:right}
 .pb{display:inline-block;width:26px;height:5px;border-radius:3px;background:var(--line);overflow:hidden}.pb i{display:block;height:100%;background:var(--ink2);border-radius:3px}.eo.diff .pb i{background:#2a9d57}
-.lv-sw{display:grid;grid-template-columns:minmax(0,1fr) auto 76px 40px;gap:6px;align-items:center;padding:5px 0;border-top:1px solid var(--line);font-size:.88rem}.lv-sw small{color:var(--ink2);font-size:.7rem}
+.lv-sw{display:grid;grid-template-columns:minmax(0,1fr) auto 76px 40px;gap:6px;align-items:center;padding:5px 0;border-top:1px solid var(--line);font-size:.88rem}.lv-sw small{color:var(--ink2);font-size:.7rem;white-space:nowrap}
 .lv-sw .eo{margin:0;justify-self:end}.sb{position:relative;height:8px;background:var(--card2);border-radius:4px}.sb:after{content:'';position:absolute;left:50%;top:-2px;bottom:-2px;width:1px;background:var(--ink2);opacity:.5}
 .sb i{position:absolute;top:0;bottom:0;border-radius:4px}.sb i.g{background:#2a9d57}.sb i.r{background:#c0392b}.lv-sw b{font:700 .85rem var(--num);text-align:right}.gn{color:#2a9d57}.rd{color:#c0392b}
 .lv-p.mine{background:rgba(42,157,87,.13);margin:0 -8px;padding-left:8px;padding-right:8px;border-radius:8px;border-top-color:transparent}.mine-t{font:700 .6rem var(--num);text-transform:uppercase;letter-spacing:.04em;color:#2a9d57;margin-left:6px}.mine-t.bn{color:var(--ink2)}
@@ -1648,14 +1648,14 @@ function renderLive(){
   const RET = 6;   // what a decent return is worth, for the swing figures
   const myMult = new Map(T ? T.xi.filter(r=>r[1]>0).map(r=>[r[0], r[1]]) : []);
   const avgMult = id => rivals.length ? (owners.get(id)||[]).reduce((a,r) => a + (r.t.xi.find(x=>x[0]===id)||[0,0])[1], 0) / rivals.length : 0;
-  const swings = rivals.length ? [...new Set([...myMult.keys(), ...owners.keys()])].filter(id => when(id))
+  const swings = rivals.length ? [...owners.keys()].filter(id => !myMult.has(id) && when(id))
     .map(id => ({id, sw:RET*((myMult.get(id)||0) - avgMult(id)), mine:myMult.has(id)})).filter(x => Math.abs(x.sw) >= 0.5)
     .sort((a,b) => Math.abs(b.sw)-Math.abs(a.sw)).slice(0,10) : [];
   const swMax = Math.max(1, ...swings.map(x => Math.abs(x.sw)));
-  const swing = swings.length ? `<div class="lv-t"><div class="lv-bn" style="margin:0 0 4px">Still to come: what moves you against the league</div>${swings.map(x => { const p = nm(x.id), n = pct(x.id), w = Math.round(50*Math.abs(x.sw)/swMax);
+  const swing = swings.length ? `<div class="lv-t"><div class="lv-bn" style="margin:0 0 4px">Rivals' players still to come</div>${swings.map(x => { const p = nm(x.id), n = pct(x.id), w = Math.round(50*Math.abs(x.sw)/swMax);
     return `<div class="lv-sw"><span>${esc(p[0])}<small> ${esc(p[1])} ${esc(p[2])} &middot; ${when(x.id)}</small></span>${chip(x.mine ? 100-n : -n, x.mine ? (100-n)+'% of the others in this league do not have him' : n+'% of the others in this league have him and you do not')}
       <span class="sb"><i class="${x.sw>0?'g':'r'}" style="${x.sw>0?'left:50%':'right:50%'};width:${w}%"></i></span><b class="${x.sw>0?'gn':'rd'}">${x.sw>0?'+':'&minus;'}${Math.abs(x.sw).toFixed(1)}</b></div>`; }).join('')}
-    <div class="lv-hint">Impact runs from +100% (nobody else in your league has him) through 0% (everyone does) to −100% (a player every rival has and you do not). The bar is the gain or loss against the average rival if he returns ${RET} points (captains count double); right is good for you.</div></div>` : '';
+    <div class="lv-hint">Players your rivals have and you do not. The percentage is the share of rivals who have him; the bar is what a ${RET}-point return costs you against the average rival (captains count double).</div></div>` : '';
   const fx = L.fx.map(f => {
     const st = f.fin ? 'Full time' : f.st ? ('Live' + (f.m ? ' ' + f.m + "'" : '')) : kick(f.ko);
     const sc = f.st ? `${f.hs ?? 0} - ${f.as ?? 0}` : 'v';
