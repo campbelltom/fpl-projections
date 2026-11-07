@@ -136,6 +136,7 @@ def league_table(meta, standings, picks, played, done, pts, pos):
         if pk:
             tm = build_team("", s["entry"], pk, played, done, pts, pos)
             row["gw"] = tm["pts"]
+            row["t"] = {k: tm[k] for k in ("xi", "bench", "subs", "cap")}
             row["chip"] = tm["chip"]
             row["left"] = sum(1 for r in tm["xi"] if r[1] and not done(r[0]))
         else:
@@ -176,6 +177,10 @@ def build(boot, fixtures, live, picks_by_team, now, leagues=()):
         for r in t["xi"] + t["bench"]:
             need.add(r[0])
     lg = [league_table(m, st, pk, played, done, pts, pos) for m, st, pk in leagues]
+    for g in lg:
+        for r in g["rows"]:
+            for x in (r.get("t") or {}).get("xi", []) + (r.get("t") or {}).get("bench", []):
+                need.add(x[0])
     top = sorted(pts, key=lambda e: -pts[e][0])[:15]
     need |= set(top)
     pl = {str(e): [el[e]["web_name"], teams[el[e]["team"]], POS[pos[e]], pts[e][0] if e in pts else 0,
