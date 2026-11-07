@@ -1625,7 +1625,7 @@ function renderLive(){
   const pct = id => rivals.length ? Math.round(100*(owners.get(id)||[]).length/rivals.length) : 0;
   const bar = n => `<span class="pb"><i style="width:${n}%"></i></span>`;
   // impact = how much of the league he separates you from: for your own player, the share of rivals who do NOT have him; for a rival's player, the share who do
-  const eo = (r, bench, X) => { if(bench || X!==T || !rivals.length || !when(r[0])) return ''; const n = 100 - pct(r[0]);
+  const eo = (r, bench, X) => { if(bench || X!==T || !rivals.length) return ''; const n = 100 - pct(r[0]);
     return `<span class="eo${n===100?' diff':''}" title="${n===100 ? 'Nobody else in this league has him: full impact' : n+'% of the '+rivals.length+' others in this league do not have him, so his points gain you ground on them'}">${bar(n)}<span class="pt">${n}%</span></span>`; };
   const prow = (r, bench, X) => { const p = nm(r[0]), played = r[3]>0, tag = r[0]===X.cap ? '<span class="cap">C</span>' : '';
     const sub = X.subs.some(s=>s[1]===r[0]) ? '<span class="sub">auto-sub in</span>' : X.subs.some(s=>s[0]===r[0]) ? '<span class="out">auto-sub out</span>' : '';
