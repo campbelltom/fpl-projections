@@ -321,6 +321,7 @@ button.fhb{font:600 .72rem var(--num);padding:5px 9px;border-radius:8px;border:0
 .lv-sw{display:grid;grid-template-columns:minmax(0,1fr) auto 76px 40px;gap:6px;align-items:center;padding:5px 0;border-top:1px solid var(--line);font-size:.88rem}.lv-sw small{color:var(--ink2);font-size:.7rem}
 .lv-sw .eo{margin:0;justify-self:end}.sb{position:relative;height:8px;background:var(--card2);border-radius:4px}.sb:after{content:'';position:absolute;left:50%;top:-2px;bottom:-2px;width:1px;background:var(--ink2);opacity:.5}
 .sb i{position:absolute;top:0;bottom:0;border-radius:4px}.sb i.g{background:#2a9d57}.sb i.r{background:#c0392b}.lv-sw b{font:700 .85rem var(--num);text-align:right}.gn{color:#2a9d57}.rd{color:#c0392b}
+.lv-p.mine{background:rgba(42,157,87,.13);margin:0 -8px;padding-left:8px;padding-right:8px;border-radius:8px;border-top-color:transparent}.mine-t{font:700 .6rem var(--num);text-transform:uppercase;letter-spacing:.04em;color:#2a9d57;margin-left:6px}.mine-t.bn{color:var(--ink2)}
 .lv-hint{margin-top:6px;font-size:.68rem;color:var(--ink2);text-align:center}.lv-x td{padding:0 0 6px 1.6rem !important;border-top:0 !important}.lv-sq{background:var(--card2);border-radius:10px;padding:2px 10px 6px}.lv-sq .lv-p:first-child{border-top:0}
 .lv-ev{font-size:.74rem;color:var(--ink2);margin-top:5px;line-height:1.5}.lv-ev b{color:var(--ink);font-weight:600}
 .pc{background:var(--card);border-radius:14px;padding:9px 12px 8px;margin-bottom:6px}
@@ -1658,7 +1659,10 @@ function renderLive(){
     const ev = f.st ? lvEvents(L, f) : '';
     return `<div class="lv-f"><div class="lv-sc"><span>${esc(f.h)}</span><em>${sc}</em><span>${esc(f.a)}</span></div><div class="lv-st${f.st&&!f.fin?' on':''}">${st}</div>${ev?`<div class="lv-ev">${ev}</div>`:''}</div>`;
   }).join('');
-  const top = (L.top||[]).slice(0,10).map(id => { const p = nm(id); return `<div class="lv-p"><span>${esc(p[0])}<small> ${esc(p[1])} ${esc(p[2])}</small></span><small>${p[4]}'</small><b>${p[3]}</b></div>`; }).join('');
+  const myBench = new Set(T ? T.bench.map(r=>r[0]) : []);
+  const top = (L.top||[]).filter((id,i) => i<10 || myMult.has(id)).map(id => { const p = nm(id), m = myMult.get(id), bn = myBench.has(id);
+    const tag = m ? `<span class="mine-t">${m>1 ? 'yours &times;'+m : 'yours'}</span>` : bn ? '<span class="mine-t bn">your bench</span>' : '';
+    return `<div class="lv-p${m ? ' mine' : ''}"><span>${esc(p[0])}${tag}<small> ${esc(p[1])} ${esc(p[2])}</small></span><small>${p[4]}'</small><b>${p[3]}</b></div>`; }).join('');
   el.innerHTML = `<div class="lv-h"><b>GW${L.gw}</b><span>${anyOn ? 'matches under way' : 'no match on right now'} &middot; updated ${lvTime(L.at)}${ageMin>12 && anyOn ? ' (running late)' : ''}</span></div>${team}${league}${swing}${fx}<div class="lv-t"><div class="lv-bn" style="margin:0 0 4px">Top scorers this gameweek</div>${top}</div>
    <p class="sqnote">Mini-league tables are ranked on points before this gameweek plus live points (up to the first 60 managers of up to three private leagues; yours are found automatically, or list league ids in config/leagues.json). Points use provisional bonus from BPS until the official bonus is in. ${state.liveSrc==='api' ? 'Read through the Cloudflare proxy: refreshes every 30 seconds, a minute or so behind the official site at most.' : 'The picture refreshes about every five minutes; it can run a little behind the official site.'}</p>`;
 }
