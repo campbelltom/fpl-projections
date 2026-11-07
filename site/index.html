@@ -1542,6 +1542,7 @@ let liveTimer = null;
 /* With the Cloudflare Worker set, the page reads the official API through it (a cached copy, a few seconds old) and works the scores out
    itself; if that fails, or no Worker is set, it falls back to the file the GitHub job publishes every five minutes. */
 const FPL_PROXY = 'https://campbell-fpl-proxy.campbelltom321.workers.dev';
+const LV_DEFAULT_LEAGUE = /horses\s+and\s+ants/i;   // listed first and shown by default
 const lvMem = {boot:null, bootAt:0, picks:new Map(), ents:new Map(), lgs:null, lgsAt:0};
 const lvApi = path => fetch(FPL_PROXY+'/fpl/'+path).then(r => { if(!r.ok) throw new Error('FPL '+r.status); return r.json(); });
 async function lvPool(items, n, fn){ const out = []; let i = 0; await Promise.all(Array.from({length:Math.min(n,items.length)}, async () => { while(i<items.length){ const k = i++; out[k] = await fn(items[k]); } })); return out; }
@@ -1565,7 +1566,7 @@ async function liveFromApi(){
   let leagues = [];
   try {
     if(!lvMem.lgs || Date.now()-lvMem.lgsAt > 120e3){
-      if(!lvMem.ids){ const ent = await lvApi(`entry/${mine[0].id}/`); lvMem.ids = ((ent.leagues||{}).classic||[]).filter(c => c.league_type==='x').slice(0,3).map(c => c.id); }
+      if(!lvMem.ids){ const ent = await lvApi(`entry/${mine[0].id}/`); lvMem.ids = ((ent.leagues||{}).classic||[]).filter(c => c.league_type==='x').sort((a,b) => LV_DEFAULT_LEAGUE.test(b.name)-LV_DEFAULT_LEAGUE.test(a.name)).slice(0,3).map(c => c.id); }
       lvMem.lgs = await lvPool(lvMem.ids, 3, id => lvApi(`leagues-classic/${id}/standings/`)); lvMem.lgsAt = Date.now();
     }
     for(const st of lvMem.lgs){
@@ -1612,7 +1613,7 @@ function renderLive(){
     <div class="big">${T.pts}<small style="font-size:.8rem;font-weight:500"> pts</small></div>
     <div class="meta">${T.chip ? ({bboost:'Bench boost',freehit:'Free hit','3xc':'Triple captain',wildcard:'Wildcard'}[T.chip]||T.chip)+' active &middot; ' : ''}${T.cost ? '-'+T.cost+' for transfers &middot; ' : ''}live, with provisional bonus${T.subs.length ? ' and automatic substitutions' : ''}</div>
     ${T.xi.map(r=>prow(r,false)).join('')}${T.bench.length ? '<div class="lv-bn">Bench</div>'+T.bench.map(r=>prow(r,true)).join('') : ''}</div>` : '';
-  const lgs = L.lg || []; if(lgs.length && !lgs.some(x=>x.id===state.liveLg)) state.liveLg = lgs[0].id;
+  const lgs = L.lg || []; if(lgs.length && !lgs.some(x=>x.id===state.liveLg)) state.liveLg = (lgs.find(x=>LV_DEFAULT_LEAGUE.test(x.name)) || lgs[0]).id;
   const G = lgs.find(x=>x.id===state.liveLg), mineIds = new Set(L.teams.map(x=>x.id));
   const league = G ? (() => {
     const pre = G.rows.slice().sort((a,b)=>b.pre-a.pre), preRank = new Map(pre.map((r,i)=>[r.e,i+1]));

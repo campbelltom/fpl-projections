@@ -4,7 +4,7 @@ Everything comes from the official Fantasy API (bootstrap-static, fixtures, even
 from the fixture BPS until the official bonus is awarded, and the automatic substitutions are applied once a team's games are over.
 Nothing is written outside a match window, so the last file stays as the final picture of the previous gameweek.
 """
-import json, sys, time, datetime as dt, urllib.request
+import json, re, sys, time, datetime as dt, urllib.request
 from pathlib import Path
 
 API = "https://fantasy.premierleague.com/api"
@@ -192,7 +192,9 @@ def league_ids(entry_id, cfg_file="config/leagues.json"):
     if f.exists():
         return [int(x) for x in json.loads(f.read_text())][:MAX_LEAGUES]
     ent = fetch(f"entry/{entry_id}/")
-    return [c["id"] for c in ent.get("leagues", {}).get("classic", []) if c.get("league_type") == "x"][:MAX_LEAGUES]
+    mine = [c for c in ent.get("leagues", {}).get("classic", []) if c.get("league_type") == "x"]
+    mine.sort(key=lambda c: 0 if re.search(r"horses\s+and\s+ants", c.get("name", ""), re.I) else 1)   # that league first
+    return [c["id"] for c in mine][:MAX_LEAGUES]
 
 
 def fetch_leagues(gw, tracked_picks, teams_cfg):
