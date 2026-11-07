@@ -304,7 +304,7 @@ button.fhb{font:600 .72rem var(--num);padding:5px 9px;border-radius:8px;border:0
 .lv-t{background:var(--card);border-radius:14px;padding:10px 12px;margin-bottom:8px}
 .lv-t .big{font:800 2.1rem/1 var(--num)}.lv-t .meta{font-size:.75rem;color:var(--ink2);margin:2px 0 8px}
 .lv-p{display:grid;grid-template-columns:minmax(0,1fr) auto 38px;gap:2px 8px;align-items:center;padding:4px 0;border-top:1px solid var(--line);font-size:.9rem}
-.lv-p small{color:var(--ink2);font-size:.7rem}.lv-p b{font:700 .95rem var(--num);text-align:right}.lv-p.off{opacity:.45}
+.lv-p4{grid-template-columns:minmax(0,1fr) auto 4.4rem 38px}.lv-p4 .eo{margin:0;justify-self:end}.lv-p4>small{text-align:right}.lv-p small{color:var(--ink2);font-size:.7rem}.lv-p b{font:700 .95rem var(--num);text-align:right}.lv-p.off{opacity:.45}
 .lv-p .cap{display:inline-grid;place-items:center;width:1rem;height:1rem;border-radius:50%;background:var(--ink);color:var(--bg);font:700 .6rem var(--num);margin-left:5px}
 .lv-p .sub{color:#2a9d57;font-size:.7rem;margin-left:5px}.lv-p .out{color:#c0392b;font-size:.7rem;margin-left:5px}
 .lv-bn{margin-top:6px;font-size:.7rem;text-transform:uppercase;letter-spacing:.06em;color:var(--ink2)}
@@ -316,10 +316,10 @@ button.fhb{font:600 .72rem var(--num);padding:5px 9px;border-radius:8px;border:0
 .lv-lg td.n small{display:block;color:var(--ink2);font-size:.68rem}.lv-lg td.r{text-align:right;font:600 .9rem var(--num)}.lv-lg td.r small{display:block;color:var(--ink2);font:400 .66rem var(--body)}
 .lv-lg tr.me td{background:var(--card2)}.mv{font-size:.65rem;margin-left:3px}.mv.u{color:#2a9d57}.mv.d{color:#c0392b}
 .eo{display:inline-flex;align-items:center;gap:4px;font:600 .62rem var(--num);padding:1px 6px 1px 4px;border-radius:8px;margin-left:5px;background:var(--card2);color:var(--ink2);vertical-align:1px}
-.eo.diff{box-shadow:inset 0 0 0 1px #2a9d57;color:#2a9d57}
+.eo.diff{color:#2a9d57}.pt{display:inline-block;min-width:2.3em;text-align:right}
 .pb{display:inline-block;width:26px;height:5px;border-radius:3px;background:var(--line);overflow:hidden}.pb i{display:block;height:100%;background:var(--ink2);border-radius:3px}.eo.diff .pb i{background:#2a9d57}
 .lv-sw{display:grid;grid-template-columns:minmax(0,1fr) auto 76px 40px;gap:6px;align-items:center;padding:5px 0;border-top:1px solid var(--line);font-size:.88rem}.lv-sw small{color:var(--ink2);font-size:.7rem}
-.lv-sw .eo{margin:0}.sb{position:relative;height:8px;background:var(--card2);border-radius:4px}.sb:after{content:'';position:absolute;left:50%;top:-2px;bottom:-2px;width:1px;background:var(--ink2);opacity:.5}
+.lv-sw .eo{margin:0;justify-self:end}.sb{position:relative;height:8px;background:var(--card2);border-radius:4px}.sb:after{content:'';position:absolute;left:50%;top:-2px;bottom:-2px;width:1px;background:var(--ink2);opacity:.5}
 .sb i{position:absolute;top:0;bottom:0;border-radius:4px}.sb i.g{background:#2a9d57}.sb i.r{background:#c0392b}.lv-sw b{font:700 .85rem var(--num);text-align:right}.gn{color:#2a9d57}.rd{color:#c0392b}
 .lv-hint{margin-top:6px;font-size:.68rem;color:var(--ink2);text-align:center}.lv-x td{padding:0 0 6px 1.6rem !important;border-top:0 !important}.lv-sq{background:var(--card2);border-radius:10px;padding:2px 10px 6px}.lv-sq .lv-p:first-child{border-top:0}
 .lv-ev{font-size:.74rem;color:var(--ink2);margin-top:5px;line-height:1.5}.lv-ev b{color:var(--ink);font-weight:600}
@@ -1625,10 +1625,10 @@ function renderLive(){
   const bar = n => `<span class="pb"><i style="width:${n}%"></i></span>`;
   // impact = how much of the league he separates you from: for your own player, the share of rivals who do NOT have him; for a rival's player, the share who do
   const eo = (r, bench, X) => { if(bench || X!==T || !rivals.length || !when(r[0])) return ''; const n = 100 - pct(r[0]);
-    return `<span class="eo${n===100?' diff':''}" title="${n===100 ? 'Nobody else in this league has him: full impact' : n+'% of the '+rivals.length+' others in this league do not have him, so his points gain you ground on them'}">${bar(n)}${n}%</span>`; };
+    return `<span class="eo${n===100?' diff':''}" title="${n===100 ? 'Nobody else in this league has him: full impact' : n+'% of the '+rivals.length+' others in this league do not have him, so his points gain you ground on them'}">${bar(n)}<span class="pt">${n}%</span></span>`; };
   const prow = (r, bench, X) => { const p = nm(r[0]), played = r[3]>0, tag = r[0]===X.cap ? '<span class="cap">C</span>' : '';
     const sub = X.subs.some(s=>s[1]===r[0]) ? '<span class="sub">auto-sub in</span>' : X.subs.some(s=>s[0]===r[0]) ? '<span class="out">auto-sub out</span>' : '';
-    return `<div class="lv-p${played||!bench&&r[1]?'':' off'}"><span>${esc(p[0])}${tag}${sub}<small> ${esc(p[1])} ${esc(p[2])}</small>${eo(r, bench, X)}</span><small>${played?r[3]+"'":(when(r[0])||'-')}</small><b>${r[1]>1?r[2]*r[1]:r[2]}</b></div>`; };
+    return `<div class="lv-p lv-p4${played||!bench&&r[1]?'':' off'}"><span>${esc(p[0])}${tag}${sub}<small> ${esc(p[1])} ${esc(p[2])}</small></span>${eo(r, bench, X) || '<span></span>'}<small>${played?r[3]+"'":(when(r[0])||'-')}</small><b>${r[1]>1?r[2]*r[1]:r[2]}</b></div>`; };
   const squad = X => X.xi.map(r=>prow(r,false,X)).join('') + (X.bench.length ? '<div class="lv-bn">Bench</div>'+X.bench.map(r=>prow(r,true,X)).join('') : '');
   const team = T ? `<div class="lv-t"><select id="lv-team" aria-label="Team">${L.teams.map(t=>`<option${t.label===T.label?' selected':''}>${esc(t.label)}</option>`).join('')}</select>
     <div class="big">${T.pts}<small style="font-size:.8rem;font-weight:500"> pts</small></div>
@@ -1649,7 +1649,7 @@ function renderLive(){
     .sort((a,b) => Math.abs(b.sw)-Math.abs(a.sw)).slice(0,10) : [];
   const swMax = Math.max(1, ...swings.map(x => Math.abs(x.sw)));
   const swing = swings.length ? `<div class="lv-t"><div class="lv-bn" style="margin:0 0 4px">Still to come: what moves you against the league</div>${swings.map(x => { const p = nm(x.id), n = pct(x.id), w = Math.round(50*Math.abs(x.sw)/swMax);
-    return `<div class="lv-sw"><span>${esc(p[0])}<small> ${esc(p[1])} ${esc(p[2])} &middot; ${when(x.id)}</small></span><span class="eo${x.mine&&n===0?' diff':''}" title="${x.mine ? (100-n)+'% of the others in this league do not have him' : n+'% of the others in this league have him and you do not'}">${bar(x.mine?100-n:n)}${x.mine?100-n:n}%</span>
+    return `<div class="lv-sw"><span>${esc(p[0])}<small> ${esc(p[1])} ${esc(p[2])} &middot; ${when(x.id)}</small></span><span class="eo${x.mine&&n===0?' diff':''}" title="${x.mine ? (100-n)+'% of the others in this league do not have him' : n+'% of the others in this league have him and you do not'}">${bar(x.mine?100-n:n)}<span class="pt">${x.mine?100-n:n}%</span></span>
       <span class="sb"><i class="${x.sw>0?'g':'r'}" style="${x.sw>0?'left:50%':'right:50%'};width:${w}%"></i></span><b class="${x.sw>0?'gn':'rd'}">${x.sw>0?'+':'&minus;'}${Math.abs(x.sw).toFixed(1)}</b></div>`; }).join('')}
     <div class="lv-hint">The percentage is his impact: the share of your rivals he separates you from (they do not have him if he is yours; they do if he is theirs). The bar is the gain or loss against the average rival if he returns ${RET} points (captains count double); right is good for you.</div></div>` : '';
   const fx = L.fx.map(f => {
