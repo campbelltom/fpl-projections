@@ -169,6 +169,7 @@ dialog::backdrop{background:rgba(0,0,0,.45)}
 .to .fx{background:var(--warn);color:#000;border-radius:3px;padding:0 4px;margin-right:4px;font:700 .55rem var(--num);text-transform:uppercase;font-style:normal}
 .lim .kg{display:flex;align-items:center;gap:6px}
 .limw{margin:8px 0;font-size:.8rem}
+.rp .ov{color:var(--warn,#c77d00);font-style:normal;font-size:.7rem}.fund .cl{display:block}.fund .tg small.dn{color:var(--bad,#d64545)}.sqsum b.short{color:var(--bad,#d64545)}
 .px{font:600 .62rem var(--num);font-style:normal;border-radius:5px;padding:1px 5px;margin-left:5px;white-space:nowrap;display:inline-block}.px.act{background:var(--warn);color:#000}.px.soft{background:var(--card2);color:var(--ink2)}
 button.fhb{font:600 .72rem var(--num);padding:5px 9px;border-radius:8px;border:0;background:var(--ink);color:var(--bg);margin-left:6px;cursor:pointer}
 .pxw p{margin:0;font-size:.82rem}.pxw p b{font-weight:700}.pxw .pxf{font-size:.7rem;color:var(--ink2)}
@@ -456,7 +457,7 @@ button.fhb{font:600 .72rem var(--num);padding:5px 9px;border-radius:8px;border:0
 const $ = s => document.querySelector(s);
 const POS = ['All','GKP','DEF','MID','FWD'];
 let DEF_HZ = 8;
-const state = {pos:'All', team:'', q:'', hz:8, avail:false, sort:'total', open:null, pmin:0, pmax:99, lo:0, hi:99, data:null, intro:true, vbase:'starter', view:'players', mine:-1, ft:1, plan:null, sel:null, budget:100, locked:new Set(), banned:new Set(), squad:null, srow:null, opt:null, wc:null, wcg:null, wcv:'fh', lug:0, luo:new Set(), rpl:null, repq:'', mo:{}, mp:null, mw:null, moves:[], optList:[], dall:3, dcap:{}, keepGk:true, nt:1, cheapGk:true, combo:null, copen:null, bkadj:{}, fhgw:null};
+const state = {pos:'All', team:'', q:'', hz:8, avail:false, sort:'total', open:null, pmin:0, pmax:99, lo:0, hi:99, data:null, intro:true, vbase:'starter', view:'players', mine:-1, ft:1, plan:null, sel:null, budget:100, locked:new Set(), banned:new Set(), squad:null, srow:null, opt:null, wc:null, wcg:null, wcv:'fh', lug:0, luo:new Set(), rpl:null, repq:'', mo:{}, mp:null, mw:null, moves:[], optList:[], dall:3, dcap:{}, keepGk:true, nt:1, cheapGk:true, combo:null, copen:null, bkadj:{}, fhgw:null, bbgw:null, fund:null, fopen:null};
 const store = {
   get(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } },
   set(k,v){ try{ localStorage.setItem(k,v); }catch(e){} },
@@ -525,7 +526,7 @@ function advanceExpired(d){
 function start(d){
   advanceExpired(d);
   DEF_HZ = Math.min(8, d.horizon.length); d.hall = d.horizon.slice(); d.horizon = d.hall.slice(0, DEF_HZ);   // the data runs 16 weeks so the wildcard solver sees far enough; only the first 8 are shown
-  state.data = d; state.hz = DEF_HZ; loadLimits(); loadBank(); loadFh(); moInit(d); moBar();
+  state.data = d; state.hz = DEF_HZ; loadLimits(); loadBank(); loadFh(); loadBb(); moInit(d); moBar();
   const pr = d.players.map(p => p.price).filter(x => x != null);
   state.lo = state.pmin = Math.floor(Math.min(...pr)*10)/10; state.hi = state.pmax = Math.ceil(Math.max(...pr)*10)/10;
   $('#lock').hidden = true; $('#app').hidden = false;
@@ -690,6 +691,8 @@ const BENCH_W = 0.1;
 const BENCH_ORD = [1.6, 0.9, 0.5];           // first sub is called on far more often than the third, so each place down the bench counts for less (average stays near 1)
 const BANK_W = 0.3;                         // points per £1m left in the bank, a tie-breaker only
 const GK_BENCH = 0.2;                        // the spare keeper only plays if the first choice is out (a few % of weeks), so he is worth far less than an outfield sub
+let BBX = -1;                                 // a planned bench boost week (index into the weeks being scored): the whole bench scores that week
+function withBB(bbx, fn){ const o = BBX; BBX = bbx; try{ return fn(); } finally{ BBX = o; } }
 function lineupScore(sq, E, hz, bw){
   if(bw===undefined) bw = BENCH_W;            // sq: array of pool indexes; E[i]: array of ep per gw
   let tot = 0;
@@ -697,15 +700,15 @@ function lineupScore(sq, E, hz, bw){
     const by = {GKP:[],DEF:[],MID:[],FWD:[]};
     for(const i of sq) by[i.pos].push(E[i.k][g]);
     for(const k in by) by[k].sort((a,b)=>b-a);
-    let xi = by.GKP[0], cap = by.GKP[0], gb = by.GKP[1] || 0, bench = 0;
+    let xi = by.GKP[0], cap = by.GKP[0], gb = by.GKP[1] || 0, bench = 0, braw = 0;
     const rest = [];
     for(const k of ['DEF','MID','FWD']){
       const a = by[k];
       for(let j=0;j<a.length;j++){ if(j<MINXI[k]){ xi+=a[j]; if(a[j]>cap) cap=a[j]; } else rest.push(a[j]); }
     }
     rest.sort((a,b)=>b-a);
-    for(let j=0;j<rest.length;j++){ if(j<4){ xi+=rest[j]; if(rest[j]>cap) cap=rest[j]; } else bench+=rest[j]*(BENCH_ORD[j-4]===undefined?BENCH_ORD[2]:BENCH_ORD[j-4]); }
-    tot += xi + cap + bw*bench + bw*GK_BENCH*gb;
+    for(let j=0;j<rest.length;j++){ if(j<4){ xi+=rest[j]; if(rest[j]>cap) cap=rest[j]; } else { braw += rest[j]; bench+=rest[j]*(BENCH_ORD[j-4]===undefined?BENCH_ORD[2]:BENCH_ORD[j-4]); } }
+    tot += g===BBX ? xi + cap + braw + gb : xi + cap + bw*bench + bw*GK_BENCH*gb;
   }
   return tot;
 }
@@ -819,16 +822,17 @@ function repPicker(p, sq, hz, ownedSet){
   const room = W ? W.bank + sell : state.budget - (state.squad ? state.squad.spent : 0) + p.price;
   const inSq = new Set(sq.map(x=>x.code)), cnt = {}; sq.forEach(x => { if(x.code!==p.code) cnt[x.team]=(cnt[x.team]||0)+1; });
   const E = d.players.map(x => x.ep.slice(0,hz)), idx = new Map(d.players.map((x,k)=>[x.code,k]));
-  const ob = x => ({pos:x.pos, k:idx.get(x.code), p:x}), cur = sq.map(ob), base = lineupScore(cur, E, hz, 0), a = sq.findIndex(x=>x.code===p.code);
+  const bbx = state.bbgw==null ? -1 : (i => i<hz ? i : -1)(d.hall.indexOf(state.bbgw));
+  const ob = x => ({pos:x.pos, k:idx.get(x.code), p:x}), cur = sq.map(ob), base = withBB(bbx, () => lineupScore(cur, E, hz, 0)), a = sq.findIndex(x=>x.code===p.code);
   const dc = {}; sq.forEach(x => { if(x.code!==p.code && isDef(x.pos)) dc[x.team]=(dc[x.team]||0)+1; });
   const dlim = x => isDef(x.pos) && (dc[x.team]||0) >= capFor(x.team);
   const q = state.repq.trim().toLowerCase();
   let c = d.players.filter(x => x.pos===p.pos && x.price!=null && !inSq.has(x.code) && x.status!=='n' && (!q || x.name.toLowerCase().includes(q) || x.team.toLowerCase()===q));
-  c = c.map(x => { const w = cur.slice(); w[a] = ob(x); return {x, gain: lineupScore(w,E,hz,0)-base, ok: x.price <= room+1e-9 && (cnt[x.team]||0) < 3 && !dlim(x), why: x.price > room+1e-9 ? 'over budget' : (cnt[x.team]||0) >= 3 ? '3 from club' : dlim(x) ? 'club limit' : ''}; });
+  c = withBB(bbx, () => c.map(x => { const w = cur.slice(); w[a] = ob(x), over = Math.max(0, x.price - room), legal = (cnt[x.team]||0) < 3 && !dlim(x); return {x, over, gain: lineupScore(w,E,hz,0)-base, ok: legal && (!!W || over<=1e-9), why: over>1e-9 && !W ? 'over budget' : (cnt[x.team]||0) >= 3 ? '3 from club' : dlim(x) ? 'club limit' : ''}; }));
   c.sort((u,v) => (v.ok-u.ok) || v.gain-u.gain);
-  const list = c.slice(0, q ? 40 : 25).map(r => `<button type="button" class="rp${r.ok?'':' no'}" data-pick="${r.x.code}" ${r.ok?'':'disabled'}><span class="rn">${esc(r.x.name)}${medical(r.x)}</span><span class="rm">${r.x.team} £${r.x.price.toFixed(1)}</span><span class="rt">${r.ok ? f1(sum(r.x.ep,hz)) : r.why}</span><b class="${r.gain>=0?'up':'dn'}">${r.ok ? (r.gain>=0?'+':'\u2212')+Math.abs(r.gain).toFixed(1) : ''}</b></button>`).join('');
+  const list = c.slice(0, q ? 40 : 25).map(r => `<button type="button" class="rp${r.ok?'':' no'}" data-pick="${r.x.code}" ${r.ok?'':'disabled'}><span class="rn">${esc(r.x.name)}${medical(r.x)}</span><span class="rm">${r.x.team} £${r.x.price.toFixed(1)}${r.over>1e-9&&r.ok?` <i class="ov">+£${r.over.toFixed(1)}m</i>`:''}</span><span class="rt">${r.ok ? f1(sum(r.x.ep,hz)) : r.why}</span><b class="${r.gain>=0?'up':'dn'}">${r.ok ? (r.gain>=0?'+':'\u2212')+Math.abs(r.gain).toFixed(1) : ''}</b></button>`).join('');
   return `<div class="rpk"><div class="rph"><input id="rep-q" type="search" placeholder="Search ${p.pos} by name or club" value="${esc(state.repq)}" aria-label="Search replacements" autocomplete="off"><span>Up to £${room.toFixed(1)}m</span></div><div class="rpl">${list||'<div class="empty">No players match.</div>'}</div>
-    <div class="sqnote">Right column is the change in XI points over ${horizonLabel(hz)}; the middle is his total. Greyed players cannot fit the budget or the three-per-club limit.</div></div>`;
+    <div class="sqnote">Right column is the change in XI points over ${horizonLabel(hz)}; the middle is his total. Greyed players break the three-per-club or club defender limit${W?'. Players over your budget are marked with how much extra you would need; pick one and the cheapest ways to raise it are suggested below.':' or do not fit the budget.'}</div></div>`;
 }
 function lineupHTML(sq, hz, ownedSet, ro){
   const d = state.data, G = []; for(let g=0; g<hz; g++) G.push(pickGW(sq, g));
@@ -864,7 +868,7 @@ function lineupHTML(sq, hz, ownedSet, ro){
     <tr class="ft2"><th class="nm">Bench</th>${benchW.map((v,g)=>`<td${g===bb.g?' class="bbc"':''}>${f1(v)}</td>`).join('')}<td></td></tr>`;
   const gone = (name, label) => `<div class="cc"><b>${label}</b><span>already used</span><em>back from GW 20</em></div>`;
   const chips = `<div class="chips">${tc.g>=0 ? `<div class="cc tcw"><b>Triple captain</b><span>GW ${d.horizon[tc.g]}: ${esc(tc.p.name)}</span><em>+${f1(tc.gain)} points</em></div>` : gone('3xc','Triple captain')}
-    ${bb.g>=0 ? `<div class="cc bbw"><b>Bench boost</b><span>GW ${d.horizon[bb.g]}</span><em>+${f1(bb.gain)} points</em></div>` : gone('bboost','Bench boost')}</div>`;
+    ${bb.g>=0 ? `<div class="cc bbw"><b>Bench boost</b><span>GW ${d.horizon[bb.g]}</span><em>+${f1(bb.gain)} points</em>${ownedSet&&!ro&&state.bbgw!==d.horizon[bb.g]?`<button type="button" class="fhb" data-bbset="${d.horizon[bb.g]}">Plan it</button>`:''}</div>` : gone('bboost','Bench boost')}</div>`;
   return {xiPts, tc, bb, cap:topCap, capN:capCount.get(topCap.code)||0, html:`${chips}<div class="gwt"><table><thead>${head}</thead><tbody>${body}</tbody><tfoot>${foot}</tfoot></table></div>`};
 }
 /* ---------- minutes what-ifs ---------- */
@@ -1015,8 +1019,21 @@ function saveLimits(){ store.set('fpl-dlim', JSON.stringify({all:state.dall, cap
 function loadFh(){ try{ const v = JSON.parse(store.get('fpl-fhplan')||'null'); state.fhgw = v && Number.isInteger(v.gw) ? v.gw : null; }catch(e){ state.fhgw = null; } if(state.fhgw!=null && !state.data.hall.includes(state.fhgw)) state.fhgw = null; }
 function fhIdx(){ return state.fhgw==null ? -1 : state.data.hall.indexOf(state.fhgw); }
 function fhData(d, f){ return {squad:d.squad, players:d.players.map(p => Object.assign({}, p, {ep:p.ep.filter((_,i)=>i!==f)}))}; }
-function fhEff(d, hz){ const f = fhIdx(); if(f<0 || f>=hz || hz<2) return {d, hz, f:-1}; return {d:fhData(d,f), hz:hz-1, f}; }
+function bbIdx(f, hz){      // the planned bench boost week as an index into the weeks being scored (a free hit week, if any, is taken out of the list)
+  if(state.bbgw==null) return -1; let i = state.data.hall.indexOf(state.bbgw); if(i<0) return -1;
+  if(f>=0){ if(i===f) return -1; if(i>f) i--; }
+  return i<hz ? i : -1;
+}
+function fhEff(d, hz){ const f = fhIdx(); if(f<0 || f>=hz || hz<2) return {d, hz, f:-1, bb:bbIdx(-1,hz)}; return {d:fhData(d,f), hz:hz-1, f, bb:bbIdx(f,hz-1)}; }
+/* A planned bench boost: that week the whole bench scores, so the suggested transfers value bench players properly for it. */
+function loadBb(){ try{ const v = JSON.parse(store.get('fpl-bbplan')||'null'); state.bbgw = v && Number.isInteger(v.gw) ? v.gw : null; }catch(e){ state.bbgw = null; } if(state.bbgw!=null && !state.data.hall.includes(state.bbgw)) state.bbgw = null; }
+function setBb(gw){
+  state.bbgw = gw; store.set('fpl-bbplan', JSON.stringify({gw}));
+  if(gw!=null && state.fhgw===gw){ state.fhgw = null; store.set('fpl-fhplan', JSON.stringify({gw:null})); }
+  state.combo = null; state.opt = null; state.copen = null; state.fund = null; state.wc = null; renderSquad();
+}
 function setFh(gw){
+  if(gw!=null && state.bbgw===gw){ state.bbgw = null; store.set('fpl-bbplan', JSON.stringify({gw:null})); }
   state.fhgw = gw; store.set('fpl-fhplan', JSON.stringify({gw}));
   state.combo = null; state.opt = null; state.copen = null; state.squad = null;
   const old = state.wc; state.wc = null; if(old && !old.busy && old.wild) runWild(old.fh);       // the free hit column does not depend on the plan, so it is reused
@@ -1054,6 +1071,10 @@ document.addEventListener('click', ev => {
   const lx = ev.target.closest('button[data-lkx]'); if(lx){ state.locked.delete(+lx.dataset.lkx); state.combo = null; limChanged(); return; }
   const fs = ev.target.closest('button[data-fhset]'); if(fs){ setFh(+fs.dataset.fhset); return; }
   if(ev.target.closest('button[data-fhclr]')){ setFh(null); return; }
+  const bs = ev.target.closest('button[data-bbset]'); if(bs){ setBb(+bs.dataset.bbset); return; }
+  if(ev.target.closest('button[data-bbclr]')){ setBb(null); return; }
+  const fo = ev.target.closest('button[data-fund]'); if(fo){ const k=+fo.dataset.fund; state.fopen = state.fopen===k?null:k; renderSquad(); return; }
+  const fd = ev.target.closest('button[data-dofund]'); if(fd){ const r = (state.fund||[])[+fd.dataset.dofund]; if(r){ r.moves.forEach(m => state.moves.push({o:m.out.code, i:m.inn.code})); state.fund=null; state.fopen=null; state.opt=null; state.combo=null; renderSquad(); } return; }
 });
 function renderSquad(){
   renderLimits();
@@ -1199,12 +1220,44 @@ function comboTop(data, hz, T, sq, n){
   if(first.length) for(const m of first[0].moves) add(comboSearch(data, hz, T, sq, n, new Set([m.inn.code]), n>=4 ? 2 : 3));
   return [...all.values()].sort((x,y)=>y.gain-x.gain).slice(0,5);
 }
+/* The bank is overdrawn (a signing you cannot yet afford): the least costly way to raise the shortfall is to swap one or two of your other
+   players for cheaper ones in the same position. Ranked by the points lost (XI with captain doubled) plus any extra transfer hit. */
+function fundOptions(data, hz, W, sq, need, protect, nm, ft){
+  const owned = new Map(W.squad.map(x=>[x.code,x.sell]));
+  const E = data.players.map(p => p.ep.slice(0,hz)), idx = new Map(data.players.map((p,k)=>[p.code,k]));
+  const ob = p => ({pos:p.pos, k:idx.get(p.code), p});
+  const cur = sq.map(ob), base = lineupScore(cur, E, hz, 0), base1 = lineupScore(cur, E, 1, 0), e0 = defExcess(sq);
+  const cands = data.players.filter(p => p.price!=null && !owned.has(p.code) && !state.banned.has(p.code) && p.status!=='n');
+  const legal = arr => { const c = {}; for(const o of arr) c[o.p.team] = (c[o.p.team]||0)+1; for(const k in c) if(c[k]>3) return false; return defExcess(arr.map(o=>o.p)) <= e0; };
+  const singles = [];
+  cur.forEach((o,a) => {
+    const po = o.p; if(state.locked.has(po.code) || protect.has(po.code)) return;
+    const sell = owned.get(po.code);
+    for(const p of cands){
+      if(p.pos!==po.pos || p.price >= sell-1e-9) continue;
+      const q = cur.slice(); q[a] = ob(p); if(!legal(q)) continue;
+      singles.push({a, p, save:sell-p.price, loss:base-lineupScore(q,E,hz,0)});
+    }
+  });
+  const hitFor = k => HIT*(Math.max(0, nm+k-ft) - Math.max(0, nm-ft));
+  const res = new Map(), eps = 1e-9, key = ms => ms.map(m=>m.a+':'+m.p.code).sort().join('|');
+  const add = ms => { const q = cur.slice(); let save = 0; for(const m of ms){ q[m.a] = ob(m.p); save += m.save; } if(save < need-eps || !legal(q)) return;
+    const loss = base - lineupScore(q,E,hz,0), loss1 = base1 - lineupScore(q,E,1,0), hit = hitFor(ms.length); res.set(key(ms), {ms, loss, loss1, hit, cost:loss+hit, save}); };
+  singles.filter(s => s.save >= need-eps).forEach(s => add([s]));
+  const byA = new Map(); singles.forEach(s => { if(!byA.has(s.a)) byA.set(s.a, []); byA.get(s.a).push(s); });
+  const pool = []; byA.forEach(l => { l.sort((x,y) => (x.loss/x.save)-(y.loss/y.save)); l.slice(0,6).forEach(s => pool.push(s)); });
+  for(let i=0;i<pool.length;i++) for(let j=i+1;j<pool.length;j++){
+    const u = pool[i], v = pool[j]; if(u.a===v.a || u.p.code===v.p.code || u.save>=need-eps || v.save>=need-eps || u.save+v.save < need-eps) continue; add([u,v]);
+  }
+  return [...res.values()].sort((x,y)=>x.cost-y.cost).slice(0,5).map(r => ({loss:r.loss, loss1:r.loss1, hit:r.hit, cost:r.cost, save:r.save, moves:r.ms.map(m => ({out:sq[m.a], inn:m.p, sell:owned.get(sq[m.a].code)}))}));
+}
 function workTeam(T){
   const by = new Map(state.data.players.map(p=>[p.code,p])), m = new Map(T.squad.map(x=>[x.code,x.sell])); let bank = adjBank(T);
   for(const mv of state.moves){ const sell = m.get(mv.o), pin = by.get(mv.i); if(sell==null||!pin) continue; m.delete(mv.o); m.set(mv.i, pin.price); bank = Math.round((bank+sell-pin.price)*10)/10; }
   return {squad:[...m].map(([code,sell])=>({code,sell})), bank};
 }
-function weekly(sq, hz){ const r=[]; for(let g=0; g<hz; g++) r.push(pickGW(sq,g).pts); return r; }
+function weekly(sq, hz){ const r=[], bb = state.bbgw==null ? -1 : state.data.hall.indexOf(state.bbgw);
+  for(let g=0; g<hz; g++){ const k = pickGW(sq,g); r.push(k.pts + (g===bb ? sq.filter(p=>!k.xi.has(p.code)).reduce((t,p)=>t+p.ep[g],0) : 0)); } return r; }
 /* ---------- price changes: the official predictor, refreshed on its own every 30 minutes (prices branch), no redeploy needed ---------- */
 const PX_URL = 'https://raw.githubusercontent.com/campbelltom/fpl-projections/prices/prices.json';
 function loadPrices(){
@@ -1271,14 +1324,23 @@ function renderTeam(hz, T){
   const head = `<p class="sqnote"><b>${esc(T.name||T.label)}</b>${T.manager?`, ${esc(T.manager)}`:''}. Bank £${adjBank(T).toFixed(1)}m${state.bkadj[T.id]?` (adjusted by ${state.bkadj[T.id]>0?'+':'\u2212'}£${Math.abs(state.bkadj[T.id]).toFixed(1)}m)`:''}. Squad as of gameweek ${T.gw}${T.pending?`, with ${T.pending} transfer${T.pending>1?'s':''} already made for gameweek ${d.horizon[0]}`:''}. Free transfers are an estimate, so check the number above.</p>`;
   const chipNote = (() => { if(!T.chips) return ''; const g0 = d.horizon[0], set = chipSet(g0), used = T.chips.filter(c => chipSet(c.event)===set), left = Object.keys(CHIP_NAMES).filter(n => !used.some(c => c.name===n));
     return `<p class="sqnote"><b>Chips:</b> ${used.length ? 'used '+used.map(c => `${CHIP_NAMES[c.name]||esc(c.name)} (GW ${c.event})`).join(', ')+'. ' : ''}${left.length ? `Still to play ${set===1?'by the GW 19 deadline':'this half'}: ${left.map(n => CHIP_NAMES[n]).join(', ')}.` : 'All chips for this half are used.'}${set===1?' A fresh set starts at GW 20.':''}</p>`; })();
-  const X = fhEff(d, hz), R = transferOptions(X.d, X.hz, W, sq), hit = ftLeft>0 ? 0 : HIT; R.opts.forEach(o => { o.inn = by.get(o.inn.code); }); state.optList = R.opts;
+  const X = fhEff(d, hz), R = withBB(X.bb, () => transferOptions(X.d, X.hz, W, sq)), hit = ftLeft>0 ? 0 : HIT; R.opts.forEach(o => { o.inn = by.get(o.inn.code); }); state.optList = R.opts;
   const sumX = (ep, n) => ep.slice(0,n).reduce((t,v,i) => t + (i===X.f ? 0 : v), 0);
-  const nt = state.nt, cKey = [nm, hz, nt, state.ft, [...state.banned].join(), [...state.locked].join(), state.dall, JSON.stringify(state.dcap), state.keepGk, JSON.stringify(state.mo).length, d.generated_at, W.bank, state.fhgw].join('|');
+  const nt = state.nt, cKey = [nm, hz, nt, state.ft, [...state.banned].join(), [...state.locked].join(), state.dall, JSON.stringify(state.dcap), state.keepGk, JSON.stringify(state.mo).length, d.generated_at, W.bank, state.fhgw, state.bbgw].join('|');
   if(nt>1 && (!state.combo || state.combo.key!==cKey)){
     const cb = state.combo = {key:cKey, busy:true, res:null};
-    setTimeout(() => { try{ cb.res = comboTop(X.d, X.hz, W, sq, nt).map(r => Object.assign({}, r, {moves:r.moves.map(m => Object.assign({}, m, {inn:by.get(m.inn.code)}))})); }catch(e){ cb.res = []; } cb.busy = false; if(state.combo===cb && view_is_squad()) renderSquad(); }, 30);
+    setTimeout(() => { try{ cb.res = withBB(X.bb, () => comboTop(X.d, X.hz, W, sq, nt)).map(r => Object.assign({}, r, {moves:r.moves.map(m => Object.assign({}, m, {inn:by.get(m.inn.code)}))})); }catch(e){ cb.res = []; } cb.busy = false; if(state.combo===cb && view_is_squad()) renderSquad(); }, 30);
   }
   const sg2 = x => (x>=0?'+':'\u2212')+Math.abs(x).toFixed(1);
+  const shortBy = W.bank < -0.04 ? Math.round(-W.bank*10)/10 : 0;
+  let fundBox = '';
+  if(shortBy){
+    const prot = new Set(state.moves.map(m=>m.i)), fo = state.fund = withBB(X.bb, () => fundOptions(X.d, X.hz, W, sq, shortBy, prot, nm, state.ft)).map(r => Object.assign({}, r, {moves:r.moves.map(m => Object.assign({}, m, {inn:by.get(m.inn.code)}))}));
+    fundBox = `<div class="tohd fund"><div class="tht"><b>£${shortBy.toFixed(1)}m short</b></div><span>You cannot afford the signing yet. These are the least costly ways to raise the money by swapping other players for cheaper ones in the same position, ranked by points lost${state.ft-nm<0?'':' (and any extra transfer hit)'}.</span></div>`
+      + (fo => fo.length ? fo.map((r,i) => { const open = state.fopen===i, lines = r.moves.map(m => `<span class="cl pos-${m.inn.pos}"><span class="in"><em>IN</em>${medical(m.inn)}<b>${esc(m.inn.name)}</b> <small>${m.inn.team} £${m.inn.price.toFixed(1)}m</small></span><span class="ot"><em>OUT</em><b>${esc(m.out.name)}</b> <small>${m.out.team} £${m.sell.toFixed(1)}m</small></span></span>`).join('');
+        return `<div class="to co fund${open?' open':''}"><button type="button" class="tr" data-fund="${i}" aria-expanded="${open}"><span class="tl">${lines}</span><span class="tg"><b class="${r.loss>0.05?'dn':''}">${r.loss>0.05?sg2(-r.loss):'0.0'}</b><small>${r.hit?'\u2212'+r.hit+' hit':(r.loss>0.05?sg2(-r.loss1)+' in GW '+d.horizon[0]:'costs nothing')}</small></span></button>${open?`<div class="od"><p>Raises £${r.save.toFixed(1)}m, enough to cover the £${shortBy.toFixed(1)}m you are short (£${(r.save-shortBy).toFixed(1)}m left over). ${r.loss>0.05?`Costs ${f1(r.loss)} points over ${horizonLabel(hz)} (${f1(r.loss1)} in GW ${d.horizon[0]}), counting only what changes in your best XI each week, captain doubled.`:'It does not change your best XI, so it costs no points.'} ${r.hit?`With ${Math.max(0,state.ft-nm)} free transfer${state.ft-nm===1?'':'s'} left, the extra ${r.moves.length===1?'transfer':'transfers'} cost${r.moves.length===1?'s':''} ${r.hit} points.`:'That fits within your free transfers.'}</p><button type="button" class="do" data-dofund="${i}">Make ${r.moves.length===1?'this transfer':'these '+r.moves.length+' transfers'}</button></div>`:''}</div>`; }).join('') : '<div class="empty">No one or two swaps to cheaper players free up enough. Unlock a player, or choose a cheaper signing.</div>')(state.fund);
+  }
+  const bbWarn = X.bb>=0 ? `<div class="wi limw"><b>Bench boost planned in GW ${state.bbgw}:</b> the whole bench scores that week, so transfers are judged with bench players counted in full for it. <button type="button" class="fhb" data-bbclr="1">Clear</button></div>` : '';
   const before = weekly(sq, hz);
   const rows = R.opts.map((o,i) => {
     const open = state.opt===i;
@@ -1301,7 +1363,7 @@ function renderTeam(hz, T){
   const fhWarn = X.f>=0 ? `<div class="wi limw"><b>Free hit planned in GW ${state.fhgw}:</b> that week is left out, so these suggestions are judged on the other weeks only. <button type="button" class="fhb" data-fhclr="1">Clear</button></div>` : '';
   let lst;
   if(nt===1){
-    lst = limWarn + fhWarn + `<div class="tohd"><div class="tht"><b>${R.opts.length?`Best ${R.opts.length} single transfers`:'Single transfers'}</b>${ntSel}</div><span>Only moves that add points in the coming gameweek are listed; the rest can wait. ${ftLeft>0?`You have ${ftLeft} free transfer${ftLeft>1?'s':''}.`:`With no free transfer left, each costs ${HIT} points: the second figure is after that.`}</span></div>`
+    lst = limWarn + fhWarn + bbWarn + fundBox + `<div class="tohd"><div class="tht"><b>${R.opts.length?`Best ${R.opts.length} single transfers`:'Single transfers'}</b>${ntSel}</div><span>Only moves that add points in the coming gameweek are listed; the rest can wait. ${ftLeft>0?`You have ${ftLeft} free transfer${ftLeft>1?'s':''}.`:`With no free transfer left, each costs ${HIT} points: the second figure is after that.`}</span></div>`
       + (R.opts.length ? rows : '<div class="empty">No single transfer improves this squad within your budget and the three-per-club rule.</div>');
   } else {
     const cb = state.combo, hn = hitN(nt);
@@ -1320,14 +1382,14 @@ function renderTeam(hz, T){
       }
       return `<div class="to co${open?' open':''}"><button type="button" class="tr" data-co="${i}" aria-expanded="${open}"><span class="tl">${lines}</span><span class="tg"><b>${sg2(r.gain)}</b><small>${hn?sg2(net)+' after hits':sg2(r.gain1)+' in GW '+d.horizon[0]}</small></span></button>${det}</div>`;
     }).join('');
-    lst = limWarn + fhWarn + `<div class="tohd"><div class="tht"><b>Best ${nt} transfers together</b>${ntSel}</div><span>Sets of ${nt} moves chosen jointly, so one sale can fund another signing. Every transfer in a set has to add something; each set must also add points in the coming gameweek. ${ftLeft>0?`You have ${ftLeft} free transfer${ftLeft>1?'s':''}${nt>ftLeft?`, so ${nt-ftLeft} cost${nt-ftLeft>1?'':'s'} ${HIT} points each`:''}.`:`With no free transfer left, each costs ${HIT} points.`}</span></div>${body}`;
+    lst = limWarn + fhWarn + bbWarn + fundBox + `<div class="tohd"><div class="tht"><b>Best ${nt} transfers together</b>${ntSel}</div><span>Sets of ${nt} moves chosen jointly, so one sale can fund another signing. Every transfer in a set has to add something; each set must also add points in the coming gameweek. ${ftLeft>0?`You have ${ftLeft} free transfer${ftLeft>1?'s':''}${nt>ftLeft?`, so ${nt-ftLeft} cost${nt-ftLeft>1?'':'s'} ${HIT} points each`:''}.`:`With no free transfer left, each costs ${HIT} points.`}</span></div>${body}`;
   }
   const wi = nm ? `<div class="wi"><div><b>${nm} transfer${nm>1?'s':''} made</b> <span>${state.moves.map(m=>`${esc(by.get(m.o).name)} to ${esc(by.get(m.i).name)}`).join(', ')}</span></div>
     <div class="wn"><span><b>${sg2(L.xiPts-base0)}</b> points</span><span><b>${hitSoFar?'\u2212'+hitSoFar:'0'}</b> hit</span><span><b>${sg2(L.xiPts-base0-hitSoFar)}</b> net</span></div>
     <button type="button" id="wi-reset">Back to my team</button></div>` : '';
   const shown = nt===1 ? R.opts : (state.combo && !state.combo.busy && state.combo.res ? state.combo.res.flatMap(r => r.moves) : []);
   const pxb = pxBox(sq, shown.map(o => o.inn), shown.map(o => o.out));
-  out.innerHTML = head + chipNote + wi + pxb + `<div class="sqsum"><div><b>${f1(L.xiPts)}</b><span>XI points with the captain doubled</span></div><div><b>${esc(short(L.cap.name))}</b><span>captain in ${L.capN} of ${hz} weeks</span></div><div><b>£${W.bank.toFixed(1)}m</b><span>in the bank</span></div></div>
+  out.innerHTML = head + chipNote + wi + pxb + `<div class="sqsum"><div><b>${f1(L.xiPts)}</b><span>XI points with the captain doubled</span></div><div><b>${esc(short(L.cap.name))}</b><span>captain in ${L.capN} of ${hz} weeks</span></div><div><b${shortBy?' class="short"':''}>${shortBy?'\u2212':''}£${Math.abs(W.bank).toFixed(1)}m</b><span>${shortBy?'short of the bank':'in the bank'}</span></div></div>
     <p class="sqnote">${MEDNOTE}</p>${L.html}<div id="wcbox">${wcHTML()}</div>${lst}`;
 }
 /* ---------- wildcard and free hit simulation ---------- */
@@ -1337,7 +1399,7 @@ function wcCtx(){
   const by = new Map(state.data.players.map(p=>[p.code,p])), sq = W.squad.map(x=>by.get(x.code));
   const owned = new Map(W.squad.map(x=>[x.code,x.sell]));
   const B = Math.round((W.bank + W.squad.reduce((t,x)=>t+x.sell,0))*10)/10;
-  const key = [hz, B, W.squad.map(x=>x.code).sort().join(','), [...state.banned].sort().join(','), state.dall, JSON.stringify(state.dcap), state.fhgw, state.cheapGk, [...state.locked].sort().join(',')].join('|');
+  const key = [hz, B, W.squad.map(x=>x.code).sort().join(','), [...state.banned].sort().join(','), state.dall, JSON.stringify(state.dcap), state.fhgw, state.bbgw, state.cheapGk, [...state.locked].sort().join(',')].join('|');
   return {T, hz, H, W, sq, owned, B, key};
 }
 function runWild(keepFh){
@@ -1442,7 +1504,7 @@ function pickReplacement(inn){
     state.squad.spent = Math.round(state.squad.squad.reduce((t,p)=>t+p.price,0)*10)/10;
     state.locked.delete(o); state.locked.add(inn);
   }
-  state.rpl = null; state.repq = ''; state.srow = inn; renderSquad();
+  state.rpl = null; state.repq = ''; state.srow = inn; state.fopen = null; renderSquad();
 }
 function buildSquad(){
   const hz = +$('#sq-hz').value || state.data.horizon.length;
