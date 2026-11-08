@@ -260,7 +260,7 @@ def main() -> None:
         "floor": floor, "squad": SQUAD, "budget": BUDGET, "teams": teams_out,
         "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "season": CURRENT_SEASON, "current_gw": int(gw0), "horizon": gws, "deadlines": {int(g): deadlines[g].isoformat() for g in gws if g in deadlines}, "model_version": params.version,
-        "gw_dates": {int(gw): str(s.matches.loc[s.matches["gameweek"] == gw, "kickoff_time"].min()) for gw in gws},
+        "gw_dates": {int(gw): str(s.matches.loc[s.matches["gameweek"] == gw, "kickoff_time"].min()) for gw in sorted(set(gws) | {int(x["gw"]) for x in progress})},
         "yc_rules": YC_RULES, "progress": progress, "notes": notes, "penalties": pens, "players": out_players,
     }
     out = Path(a.out); out.mkdir(parents=True, exist_ok=True)

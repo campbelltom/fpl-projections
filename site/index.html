@@ -549,7 +549,16 @@ function start(d){
     $('#prog').innerHTML = pg; $('#prog').hidden = !pg; }
   const nn = d.notes.filter(x=>!x.startsWith('Penalty watch')); const n = nn.length ? nn.map(x=>`<p>${esc(x)}</p>`).join('') : '';
   $('#foot').innerHTML = n + `<p>Expected points under the official FPL scoring, from a team model plus a per-player model. Players with fewer than five league appearances are marked new: treat their numbers as rough. A small yellow card beside a name means the player is one or two yellows from a suspension (five by GW19); the projections already allow for the chance of him missing a game. Model ${esc(d.model_version)}.</p>`;
-  render();
+  if(gwInPlay(d)) setView('live'); else render();
+}
+/* a gameweek is in play from its first kick-off until every match in it is finished (as at the last update) */
+function gwInPlay(d){
+  try {
+    const pg = d.progress||[], cur = pg[pg.length-1], gd = d.gw_dates||{}, now = Date.now(); if(!cur) return false;
+    const ko = g => gd[g] ? Date.parse(String(gd[g]).replace(' ','T')) : NaN;
+    if(cur.played < cur.matches) return ko(cur.gw) <= now;
+    return ko(cur.gw+1) <= now;   // the next gameweek has kicked off since the data was built
+  } catch(e){ return false; }
 }
 
 function syncPrice(){
