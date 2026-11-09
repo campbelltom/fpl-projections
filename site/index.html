@@ -1579,7 +1579,7 @@ function lvTeam(label, id, picks, played, done, pts, pos){
   const g = e => pts.has(e) ? pts.get(e) : [0,0,0,0];
   const rows = ids => ids.map(e => [e, mult[e]||0, g(e)[0], pts.has(e) ? pts.get(e)[1] : 0]);
   const total = xi.reduce((a,e)=>a+(mult[e]||0)*g(e)[0], 0) - cost;
-  return {label, id, chip, cost, pts:total, cap, xi:rows(xi), bench:rows(rest), subs:swaps};
+  return {label, id, chip, cost, pts:total, cap, xi:rows(xi), bench:rows(rest), subs:swaps, orank:(picks.entry_history||{}).overall_rank ?? null};
 }
 function lvLeague(meta, standings, picks, played, done, pts, pos){
   const rows = standings.map(s => {
@@ -1707,7 +1707,7 @@ function renderLive(){
   const squad = X => X.xi.map(r=>prow(r,false,X)).join('') + (X.bench.length ? '<div class="lv-bn">Bench</div>'+X.bench.map(r=>prow(r,true,X)).join('') : '');
   const team = T ? `<div class="lv-t"><select id="lv-team" aria-label="Team">${L.teams.map(t=>`<option${t.label===T.label?' selected':''}>${esc(t.label)}</option>`).join('')}</select>
     <div class="big">${T.pts}<small style="font-size:.8rem;font-weight:500"> pts</small></div>
-    <div class="meta">${T.chip ? ({bboost:'Bench boost',freehit:'Free hit','3xc':'Triple captain',wildcard:'Wildcard'}[T.chip]||T.chip)+' active &middot; ' : ''}${T.cost ? '-'+T.cost+' for transfers &middot; ' : ''}live, with provisional bonus${T.subs.length ? ' and automatic substitutions' : ''}</div>
+    <div class="meta">${T.orank ? 'Overall rank '+Number(T.orank).toLocaleString('en-GB')+' &middot; ' : ''}${T.chip ? ({bboost:'Bench boost',freehit:'Free hit','3xc':'Triple captain',wildcard:'Wildcard'}[T.chip]||T.chip)+' active &middot; ' : ''}${T.cost ? '-'+T.cost+' for transfers &middot; ' : ''}live, with provisional bonus${T.subs.length ? ' and automatic substitutions' : ''}</div>
     ${squad(T)}</div>` : '';
   const league = G ? (() => {
     const pre = G.rows.slice().sort((a,b)=>b.pre-a.pre), preRank = new Map(pre.map((r,i)=>[r.e,i+1]));

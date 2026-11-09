@@ -124,7 +124,8 @@ def build_team(label, entry_id, picks, played, done, pts, pos):
     rows = lambda ids: [[e, mult.get(e, 0), pts.get(e, (0,))[0], 0 if e not in pts else pts[e][1]] for e in ids]
     total = sum(mult.get(e, 0) * pts.get(e, (0,))[0] for e in xi) - cost
     return {"label": label, "id": entry_id, "chip": chip, "cost": cost, "pts": total, "cap": cap,
-            "xi": rows(xi), "bench": rows(rest), "subs": swaps}
+            "xi": rows(xi), "bench": rows(rest), "subs": swaps,
+            "orank": picks.get("entry_history", {}).get("overall_rank")}
 
 
 def league_table(meta, standings, picks, played, done, pts, pos):
